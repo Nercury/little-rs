@@ -120,7 +120,13 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                             };
                             self.set(binding, &value);
                         },
-                        Mem::Param(i) => unimplemented!(),
+                        Mem::Param(i) => {
+                            let value = match self.parameters.get(i) {
+                                Some(value) => value.clone(),
+                                None => return Err(Error::ParameterMissing(i)),
+                            };
+                            self.set(binding, &value);
+                        },
                         Mem::StackTop1 => unimplemented!(),
                         Mem::StackTop2 => unimplemented!(),
                     },
@@ -469,6 +475,30 @@ mod test {
         let mut res = String::new();
 
         p.run(Options::empty())
+            .read_to_string(&mut res)
+            .unwrap();
+
+        assert_eq!("Hello Binding", res);
+    }
+
+    #[test]
+    fn load_binding_from_param_output_binding() {
+        let funs = HashMap::new();
+        let mut i = Interpreter::new();
+        let p = i.build_processor(
+            Template::<Value>::empty()
+                .push_instructions(vec![
+                    Instruction::Load(Binding(0), Mem::Param(Parameter(2))),
+                    Instruction::Output(Mem::Binding(Binding(0))),
+                ]),
+            &funs
+        ).unwrap();
+
+        let mut res = String::new();
+
+        p.run(Options::new(vec![
+            (Parameter(2), Value::Str("Hello Binding".into())),
+        ].into_iter().collect()))
             .read_to_string(&mut res)
             .unwrap();
 
