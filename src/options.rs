@@ -4,7 +4,7 @@ use std::convert::AsRef;
 use std::ops::Index;
 use std::collections::{ HashMap };
 
-pub enum OptionsBuildError {
+pub enum Error {
     ParameterMissing(String),
 }
 
@@ -34,14 +34,14 @@ impl<I: Eq + Hash + Copy> OptionsTemplate<I> {
     /// Given this template, build a parameter map for specified value map.
     ///
     /// This efectivelly gets rid of string mapping for values.
-    pub fn build<'a, V: Clone>(&self, parameters: &'a HashMap<&'a str, V>) -> Result<Options<I, V>, OptionsBuildError>  {
+    pub fn build<'a, V: Clone>(&self, parameters: &'a HashMap<&'a str, V>) -> Result<Options<I, V>, Error>  {
         let mut map = HashMap::new();
 
         for (k, i) in &self.key_indices {
             let value = parameters.get(&k.as_ref());
             match value {
                 Some(value) => map.insert(*i, value.clone()),
-                None => return Err(OptionsBuildError::ParameterMissing(k.clone())),
+                None => return Err(Error::ParameterMissing(k.clone())),
             };
         }
 
@@ -74,6 +74,10 @@ impl<I: Eq + Hash, V> Options<I, V> {
 
     pub fn push(&mut self, index: I, value: V) {
         self.map.insert(index, value);
+    }
+
+    pub fn get<'a>(&'a self, index: I) -> Option<&'a V> {
+        self.map.get(&index)
     }
 }
 

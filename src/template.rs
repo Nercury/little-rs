@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use {
     Constant,
     Parameter,
@@ -6,7 +5,6 @@ use {
     Instruction,
     Options,
     OptionsTemplate,
-    CallFunction,
 };
 
 /// All the data required to load the processor.

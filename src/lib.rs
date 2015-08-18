@@ -6,6 +6,7 @@
 */
 
 #![feature(drain)]
+#![feature(custom_derive)]
 
 use std::collections::HashMap;
 use std::io;
@@ -19,16 +20,16 @@ pub use options::{ OptionsTemplate, Options };
 pub use template::{ Template };
 
 /// Immutable runtime parameter for machine.
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Parameter(pub u32);
 /// Mutable internal machine binding.
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Binding(pub u32);
 /// Immutable external machine function.
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Function(pub u32);
 /// Immutable internal machine constant.
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Constant(pub u32);
 
 /// Memory location.
@@ -93,11 +94,11 @@ pub enum Value {
 }
 
 impl BufferTo for Value {
-    fn buffer_to(&self, buf: &mut Vec<u8>) -> io::Result<()> {
+    fn buffer_to(&self, buf: &mut Vec<u8>) {
         match *self {
-            Value::Null => Ok(()),
-            Value::Int(ref i) => write!(buf, "{}", i),
-            Value::Str(ref s) => write!(buf, "{}", s),
+            Value::Null => (),
+            Value::Int(ref i) => write!(buf, "{}", i).unwrap(),
+            Value::Str(ref s) => write!(buf, "{}", s).unwrap(),
         }
     }
 }
@@ -140,7 +141,7 @@ pub trait Run<'a, V> {
 
 /// Writes self to growable Vec<u8> buffer.
 pub trait BufferTo {
-    fn buffer_to(&self, buf: &mut Vec<u8>) -> io::Result<()>;
+    fn buffer_to(&self, buf: &mut Vec<u8>);
 }
 
 /// Executes template without compilation.

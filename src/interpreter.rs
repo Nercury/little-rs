@@ -3,8 +3,10 @@
 use std::io;
 use std::io::{ Read };
 use std::collections::HashMap;
+use std::error;
+use std::fmt;
 
-use options::OptionsBuildError;
+use options;
 
 use {
     Options,
@@ -29,23 +31,53 @@ pub struct InterpreterStream<'a, V: 'a> {
     parameters: Options<Parameter, V>,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum Error {
+    ParameterMissing(Parameter),
+    ConstantMissing(Constant),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::ParameterMissing(p) => write!(f, "Parameter {:?} is missing.", p),
+            Error::ConstantMissing(c) => write!(f, "Constant {:?} is missing.", c),
+        }
+    }
+}
+
+impl error::Error for Error {
+    fn description(&self) -> &str {
+        match *self {
+            Error::ParameterMissing(_) => "parameter is missing",
+            Error::ConstantMissing(_) => "constant is missing",
+        }
+    }
+}
+
 impl<'a, V: BufferTo> InterpreterStream<'a, V> {
-    fn execute(&mut self) -> bool {
+    fn execute(&mut self) -> Result<bool, Error>  {
         match self.template.instructions.get(self.pc) {
             Some(i) => {
                 match *i {
                     Instruction::Output(ref m) => match *m {
-                        Mem::Param(i) => self.parameters[i].buffer_to(&mut self.buf),
-                        // Mem::Const(i) =>
+                        Mem::Param(i) => match self.parameters.get(i) {
+                            Some(value) => value.buffer_to(&mut self.buf),
+                            None => return Err(Error::ParameterMissing(i)),
+                        },
+                        Mem::Const(i) => match self.template.constants.get(i) {
+                            Some(value) => value.buffer_to(&mut self.buf),
+                            None => return Err(Error::ConstantMissing(i)),
+                        },
                         _ => unimplemented!(),
                     },
                     _ => unimplemented!(),
                 };
                 self.pc += 1;
 
-                true
+                Ok(true)
             },
-            None => false,
+            None => Ok(false),
         }
     }
 
@@ -72,8 +104,11 @@ impl<'a, V: BufferTo> io::Read for InterpreterStream<'a, V> {
                 break;
             }
 
-            if !self.execute() {
-                return self.consume_buf(buf);
+            match self.execute() {
+                Ok(cont) => if !cont {
+                    return self.consume_buf(buf);
+                },
+                Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
             }
         }
 
@@ -87,7 +122,7 @@ pub struct Process<'a, V> {
     functions: Options<Function, &'a CallFunction>,
 }
 
-impl<'a, V: BufferTo> Run<'a, V> for Process<'a, V> {
+impl<'a, V: BufferTo + 'a> Run<'a, V> for Process<'a, V> {
     type Stream = InterpreterStream<'a, V>;
 
     fn run(&'a self, parameters: Options<Parameter, V>) -> InterpreterStream<'a, V> {
@@ -106,7 +141,7 @@ impl Interpreter {
     }
 }
 
-impl<'a, V: BufferTo> BuildProcessor<'a, V> for Interpreter {
+impl<'a, V: BufferTo + 'a> BuildProcessor<'a, V> for Interpreter {
     type Output = Process<'a, V>;
 
     /// Loads the interpreter's processor.
@@ -122,7 +157,7 @@ impl<'a, V: BufferTo> BuildProcessor<'a, V> for Interpreter {
             constants: template.constants,
             functions:  match template.functions_template.build(functions) {
                 Ok(built) => built,
-                Err(OptionsBuildError::ParameterMissing(s)) => return Err(FunctionMapError::NotFound(s)),
+                Err(options::Error::ParameterMissing(s)) => return Err(FunctionMapError::NotFound(s)),
             },
         })
     }
@@ -132,6 +167,7 @@ impl<'a, V: BufferTo> BuildProcessor<'a, V> for Interpreter {
 mod test {
     use std::collections::HashMap;
     use std::io::Read;
+    use super::Error;
     use super::super::*;
 
     #[test]
@@ -141,7 +177,9 @@ mod test {
         let p = i.build_processor(Template::empty(), &funs).unwrap();
 
         let mut res = String::new();
-        p.run(Options::<Parameter, Value>::empty()).read_to_string(&mut res);
+        p.run(Options::<Parameter, Value>::empty())
+            .read_to_string(&mut res)
+            .unwrap();
 
         assert_eq!("", res);
     }
@@ -190,9 +228,77 @@ mod test {
 
         p.run(Options::new(vec![
             (Parameter(1), Value::Str("Hello".into()))
-        ].into_iter().collect())).read_to_string(&mut res);
+        ].into_iter().collect()))
+            .read_to_string(&mut res)
+            .unwrap();
 
         assert_eq!("Hello", res);
+    }
+
+    #[test]
+    fn should_produce_error_if_missing_param() {
+        let funs = HashMap::new();
+        let mut i = Interpreter::new();
+        let p = i.build_processor(
+            Template::empty()
+                .push_instructions(vec![
+                    Instruction::Output(Mem::Param(Parameter(1)))
+                ]),
+            &funs
+        ).unwrap();
+
+        let mut res = String::new();
+
+        let res = p.run(Options::<Parameter, Value>::empty())
+            .read_to_string(&mut res)
+            .err()
+            .expect("expected to receive error from read");
+
+        assert_eq!("parameter is missing", res.get_ref().unwrap().description());
+    }
+
+    #[test]
+    fn should_output_const() {
+        let funs = HashMap::new();
+        let mut i = Interpreter::new();
+        let p = i.build_processor(
+            Template::empty()
+                .push_constant(Constant(1), Value::Str("Const Hello".into()))
+                .push_instructions(vec![
+                    Instruction::Output(Mem::Const(Constant(1)))
+                ]),
+            &funs
+        ).unwrap();
+
+        let mut res = String::new();
+
+        p.run(Options::<Parameter, Value>::empty())
+            .read_to_string(&mut res)
+            .unwrap();
+
+        assert_eq!("Const Hello", res);
+    }
+
+    #[test]
+    fn should_panic_if_missing_const() {
+        let funs = HashMap::new();
+        let mut i = Interpreter::new();
+        let p = i.build_processor(
+            Template::<Value>::empty()
+                .push_instructions(vec![
+                    Instruction::Output(Mem::Const(Constant(1)))
+                ]),
+            &funs
+        ).unwrap();
+
+        let mut res = String::new();
+
+        let res = p.run(Options::<Parameter, Value>::empty())
+            .read_to_string(&mut res)
+            .err()
+            .expect("expected to receive error from read");
+
+        assert_eq!("constant is missing", res.get_ref().unwrap().description());
     }
 
     #[test]
@@ -212,7 +318,9 @@ mod test {
 
         p.run(Options::new(vec![
             (Parameter(1), Value::Str("Hello".into())),
-        ].into_iter().collect())).read_to_string(&mut res);
+        ].into_iter().collect()))
+            .read_to_string(&mut res)
+            .unwrap();
 
         assert_eq!("HelloHello", res);
     }
@@ -237,7 +345,9 @@ mod test {
             (Parameter(1), Value::Str("Hello".into())),
             (Parameter(2), Value::Str("World".into())),
             (Parameter(3), Value::Str(" ".into())),
-        ].into_iter().collect())).read_to_string(&mut res);
+        ].into_iter().collect()))
+            .read_to_string(&mut res)
+            .unwrap();
 
         assert_eq!("Hello World", res);
     }
