@@ -27,6 +27,7 @@ use {
 pub struct InterpreterStream<'a, V: 'a> {
     pc: usize,
     buf: Vec<u8>,
+    stack: Vec<V>,
     template: &'a Process<'a, V>,
     parameters: Options<Parameter, V>,
 }
@@ -35,6 +36,7 @@ pub struct InterpreterStream<'a, V: 'a> {
 pub enum Error {
     ParameterMissing(Parameter),
     ConstantMissing(Constant),
+    StackUnderflow,
 }
 
 impl fmt::Display for Error {
@@ -42,6 +44,7 @@ impl fmt::Display for Error {
         match *self {
             Error::ParameterMissing(p) => write!(f, "Parameter {:?} is missing.", p),
             Error::ConstantMissing(c) => write!(f, "Constant {:?} is missing.", c),
+            Error::StackUnderflow => write!(f, "Attempt to pop empty stack."),
         }
     }
 }
@@ -51,6 +54,7 @@ impl error::Error for Error {
         match *self {
             Error::ParameterMissing(_) => "parameter is missing",
             Error::ConstantMissing(_) => "constant is missing",
+            Error::StackUnderflow => "stack underflow",
         }
     }
 }
@@ -70,6 +74,12 @@ impl<'a, V: BufferTo> InterpreterStream<'a, V> {
                             None => return Err(Error::ConstantMissing(i)),
                         },
                         _ => unimplemented!(),
+                    },
+                    Instruction::Pop(mut c) => while c > 0 {
+                        if let None = self.stack.pop() {
+                            return Err(Error::StackUnderflow);
+                        }
+                        c -= 1;
                     },
                     _ => unimplemented!(),
                 };
@@ -129,6 +139,7 @@ impl<'a, V: BufferTo + 'a> Run<'a, V> for Process<'a, V> {
         InterpreterStream {
             pc: 0,
             buf: Vec::new(),
+            stack: Vec::new(),
             template: self,
             parameters: parameters,
         }
@@ -236,7 +247,7 @@ mod test {
     }
 
     #[test]
-    fn should_produce_error_if_missing_param() {
+    fn should_error_if_missing_param() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
         let p = i.build_processor(
@@ -280,7 +291,7 @@ mod test {
     }
 
     #[test]
-    fn should_panic_if_missing_const() {
+    fn should_error_if_missing_const() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
         let p = i.build_processor(
@@ -299,6 +310,28 @@ mod test {
             .expect("expected to receive error from read");
 
         assert_eq!("constant is missing", res.get_ref().unwrap().description());
+    }
+
+    #[test]
+    fn should_error_if_pop_empty_stack() {
+        let funs = HashMap::new();
+        let mut i = Interpreter::new();
+        let p = i.build_processor(
+            Template::<Value>::empty()
+                .push_instructions(vec![
+                    Instruction::Pop(1)
+                ]),
+            &funs
+        ).unwrap();
+
+        let mut res = String::new();
+
+        let res = p.run(Options::<Parameter, Value>::empty())
+            .read_to_string(&mut res)
+            .err()
+            .expect("expected to receive error from read");
+
+        assert_eq!("stack underflow", res.get_ref().unwrap().description());
     }
 
     #[test]
