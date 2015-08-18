@@ -59,7 +59,7 @@ impl error::Error for Error {
     }
 }
 
-impl<'a, V: BufferTo> InterpreterStream<'a, V> {
+impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
     fn execute(&mut self) -> Result<bool, Error>  {
         match self.template.instructions.get(self.pc) {
             Some(i) => {
@@ -73,6 +73,10 @@ impl<'a, V: BufferTo> InterpreterStream<'a, V> {
                             Some(value) => value.buffer_to(&mut self.buf),
                             None => return Err(Error::ConstantMissing(i)),
                         },
+                        Mem::StackTop1 => match self.stack.last() {
+                            Some(value) => value.buffer_to(&mut self.buf),
+                            None => return Err(Error::StackUnderflow),
+                        },
                         _ => unimplemented!(),
                     },
                     Instruction::Pop(mut c) => while c > 0 {
@@ -80,6 +84,16 @@ impl<'a, V: BufferTo> InterpreterStream<'a, V> {
                             return Err(Error::StackUnderflow);
                         }
                         c -= 1;
+                    },
+                    Instruction::Push(ref loc) => match *loc {
+                        Mem::Binding(i) => unimplemented!(),
+                        Mem::Const(i) => self.stack.push(match self.template.constants.get(i) {
+                            Some(value) => value.clone(),
+                            None => return Err(Error::ConstantMissing(i)),
+                        }),
+                        Mem::Param(i) => unimplemented!(),
+                        Mem::StackTop1 => unimplemented!(),
+                        Mem::StackTop2 => unimplemented!(),
                     },
                     _ => unimplemented!(),
                 };
@@ -107,7 +121,7 @@ impl<'a, V: BufferTo> InterpreterStream<'a, V> {
     }
 }
 
-impl<'a, V: BufferTo> io::Read for InterpreterStream<'a, V> {
+impl<'a, V: BufferTo + Clone> io::Read for InterpreterStream<'a, V> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         loop {
             if self.buf.len() >= buf.len() {
@@ -132,7 +146,7 @@ pub struct Process<'a, V> {
     functions: Options<Function, &'a CallFunction>,
 }
 
-impl<'a, V: BufferTo + 'a> Run<'a, V> for Process<'a, V> {
+impl<'a, V: BufferTo + Clone + 'a> Run<'a, V> for Process<'a, V> {
     type Stream = InterpreterStream<'a, V>;
 
     fn run(&'a self, parameters: Options<Parameter, V>) -> InterpreterStream<'a, V> {
@@ -152,7 +166,7 @@ impl Interpreter {
     }
 }
 
-impl<'a, V: BufferTo + 'a> BuildProcessor<'a, V> for Interpreter {
+impl<'a, V: BufferTo + Clone + 'a> BuildProcessor<'a, V> for Interpreter {
     type Output = Process<'a, V>;
 
     /// Loads the interpreter's processor.
@@ -332,6 +346,29 @@ mod test {
             .expect("expected to receive error from read");
 
         assert_eq!("stack underflow", res.get_ref().unwrap().description());
+    }
+
+    #[test]
+    fn should_push_const_output_stack_top1() {
+        let funs = HashMap::new();
+        let mut i = Interpreter::new();
+        let p = i.build_processor(
+            Template::<Value>::empty()
+                .push_constant(Constant(1), Value::Str("Hello Stack 1".into()))
+                .push_instructions(vec![
+                    Instruction::Push(Mem::Const(Constant(1))),
+                    Instruction::Output(Mem::StackTop1),
+                ]),
+            &funs
+        ).unwrap();
+
+        let mut res = String::new();
+
+        p.run(Options::empty())
+            .read_to_string(&mut res)
+            .unwrap();
+
+        assert_eq!("Hello Stack 1", res);
     }
 
     #[test]

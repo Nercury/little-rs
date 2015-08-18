@@ -87,6 +87,7 @@ pub enum Instruction {
 }
 
 /// Simple value implementation.
+#[derive(Clone)]
 pub enum Value {
     Null,
     Int(i64),
