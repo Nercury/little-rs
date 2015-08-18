@@ -115,15 +115,15 @@ impl<'a, V: BufferTo> BuildProcessor<'a, V> for Interpreter {
     fn build_processor(
         &'a mut self,
         template: Template<V>,
-        functions: &'a HashMap<&'a str, &'a CallFunction>
+        functions: &'a HashMap<&'a str, &'a (CallFunction + 'a)>
     ) -> Result<Process<V>, FunctionMapError> {
         Ok(Process::<V> {
             instructions: template.instructions,
             constants: template.constants,
-            functions: match template.functions_template.build(functions) {
+            functions:  match template.functions_template.build(functions) {
                 Ok(built) => built,
                 Err(OptionsBuildError::ParameterMissing(s)) => return Err(FunctionMapError::NotFound(s)),
-            }
+            },
         })
     }
 }
