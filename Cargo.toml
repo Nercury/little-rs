@@ -4,5 +4,6 @@ version = "0.1.0"
 authors = ["Nerijus Arlauskas <nercury@gmail.com>"]
 documentation = "http://nercury.github.io/little-rs/little/index.html"
 repository = "https://github.com/Nercury/little-rs"
-
+license = "MIT"
+description = "Little interpreter designed as fast template backend."
 readme = "README.md"
