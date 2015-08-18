@@ -77,6 +77,10 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                             Some(value) => value.buffer_to(&mut self.buf),
                             None => return Err(Error::StackUnderflow),
                         },
+                        Mem::StackTop2 => match self.stack.get(self.stack.len() - 2) {
+                            Some(value) => value.buffer_to(&mut self.buf),
+                            None => return Err(Error::StackUnderflow),
+                        },
                         _ => unimplemented!(),
                     },
                     Instruction::Pop(mut c) => while c > 0 {
@@ -91,7 +95,10 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                             Some(value) => value.clone(),
                             None => return Err(Error::ConstantMissing(i)),
                         }),
-                        Mem::Param(i) => unimplemented!(),
+                        Mem::Param(i) => self.stack.push(match self.parameters.get(i) {
+                            Some(value) => value.clone(),
+                            None => return Err(Error::ParameterMissing(i)),
+                        }),
                         Mem::StackTop1 => unimplemented!(),
                         Mem::StackTop2 => unimplemented!(),
                     },
@@ -196,7 +203,7 @@ mod test {
     use super::super::*;
 
     #[test]
-    fn should_exit() {
+    fn exit() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
         let p = i.build_processor(Template::empty(), &funs).unwrap();
@@ -210,7 +217,7 @@ mod test {
     }
 
     #[test]
-    fn should_output_param() {
+    fn output_param() {
         // higher level example
         //
         // let env = Staging::new(Interpreter::new())
@@ -261,7 +268,7 @@ mod test {
     }
 
     #[test]
-    fn should_error_if_missing_param() {
+    fn error_if_missing_param() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
         let p = i.build_processor(
@@ -283,7 +290,7 @@ mod test {
     }
 
     #[test]
-    fn should_output_const() {
+    fn output_const() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
         let p = i.build_processor(
@@ -305,7 +312,7 @@ mod test {
     }
 
     #[test]
-    fn should_error_if_missing_const() {
+    fn error_if_missing_const() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
         let p = i.build_processor(
@@ -327,7 +334,7 @@ mod test {
     }
 
     #[test]
-    fn should_error_if_pop_empty_stack() {
+    fn error_if_pop_empty_stack() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
         let p = i.build_processor(
@@ -349,7 +356,7 @@ mod test {
     }
 
     #[test]
-    fn should_push_const_output_stack_top1() {
+    fn push_const_output_stack_top1() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
         let p = i.build_processor(
@@ -372,7 +379,33 @@ mod test {
     }
 
     #[test]
-    fn should_output_param_twice() {
+    fn push_params_output_stack_top2() {
+        let funs = HashMap::new();
+        let mut i = Interpreter::new();
+        let p = i.build_processor(
+            Template::<Value>::empty()
+                .push_instructions(vec![
+                    Instruction::Push(Mem::Param(Parameter(2))),
+                    Instruction::Push(Mem::Param(Parameter(1))),
+                    Instruction::Output(Mem::StackTop2),
+                ]),
+            &funs
+        ).unwrap();
+
+        let mut res = String::new();
+
+        p.run(Options::new(vec![
+            (Parameter(1), Value::Str("Do not show this".into())),
+            (Parameter(2), Value::Str("Hello Stack 2".into())),
+        ].into_iter().collect()))
+            .read_to_string(&mut res)
+            .unwrap();
+
+        assert_eq!("Hello Stack 2", res);
+    }
+
+    #[test]
+    fn output_param_twice() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
         let p = i.build_processor(
@@ -396,7 +429,7 @@ mod test {
     }
 
     #[test]
-    fn should_output_different_params() {
+    fn output_different_params() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
         let p = i.build_processor(
