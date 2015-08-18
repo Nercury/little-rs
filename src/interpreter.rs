@@ -5,6 +5,7 @@ use std::io::{ Read };
 use std::collections::HashMap;
 use std::error;
 use std::fmt;
+use std::borrow::Cow;
 
 use options;
 
@@ -13,6 +14,7 @@ use {
     Parameter,
     Function,
     Constant,
+    Binding,
     Instruction,
     Mem,
     Run,
@@ -28,6 +30,7 @@ pub struct InterpreterStream<'a, V: 'a> {
     pc: usize,
     buf: Vec<u8>,
     stack: Vec<V>,
+    values: Vec<V>,
     template: &'a Process<'a, V>,
     parameters: Options<Parameter, V>,
 }
@@ -59,12 +62,19 @@ impl error::Error for Error {
     }
 }
 
+const MAX_VALUES: usize = 500000;
+
 impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
     fn execute(&mut self) -> Result<bool, Error>  {
         match self.template.instructions.get(self.pc) {
             Some(i) => {
                 match *i {
                     Instruction::Output(ref m) => match *m {
+                        Mem::Binding(i) => {
+                            // TODO: Move values into another object to avoid clone here.
+                            let value = self.get(i).into_owned();
+                            value.buffer_to(&mut self.buf);
+                        },
                         Mem::Param(i) => match self.parameters.get(i) {
                             Some(value) => value.buffer_to(&mut self.buf),
                             None => return Err(Error::ParameterMissing(i)),
@@ -81,7 +91,6 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                             Some(value) => value.buffer_to(&mut self.buf),
                             None => return Err(Error::StackUnderflow),
                         },
-                        _ => unimplemented!(),
                     },
                     Instruction::Pop(mut c) => while c > 0 {
                         if let None = self.stack.pop() {
@@ -102,6 +111,19 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                         Mem::StackTop1 => unimplemented!(),
                         Mem::StackTop2 => unimplemented!(),
                     },
+                    Instruction::Load(binding, ref loc) => match *loc {
+                        Mem::Binding(i) => unimplemented!(),
+                        Mem::Const(i) => {
+                            let value = match self.template.constants.get(i) {
+                                Some(value) => value.clone(),
+                                None => return Err(Error::ConstantMissing(i)),
+                            };
+                            self.set(binding, &value);
+                        },
+                        Mem::Param(i) => unimplemented!(),
+                        Mem::StackTop1 => unimplemented!(),
+                        Mem::StackTop2 => unimplemented!(),
+                    },
                     _ => unimplemented!(),
                 };
                 self.pc += 1;
@@ -109,6 +131,31 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                 Ok(true)
             },
             None => Ok(false),
+        }
+    }
+
+    fn ensure_capacity_for_index(&mut self, index: usize) {
+        let required_len = index + 1;
+        if required_len > MAX_VALUES {
+            panic!("maximum number of values {} reached!", MAX_VALUES);
+        }
+        if required_len > self.values.len() {
+            self.values.resize(required_len, V::default());
+        }
+    }
+
+    fn set(&mut self, Binding(index): Binding, value: &V) {
+        let i = index as usize;
+        self.ensure_capacity_for_index(i);
+        * unsafe { self.values.get_unchecked_mut(i) } = value.clone();
+    }
+
+    fn get<'r>(&'r mut self, Binding(index): Binding) -> Cow<'r, V> {
+        let i = index as usize;
+        if i >= self.values.len() {
+            Cow::Owned(V::default())
+        } else {
+            Cow::Borrowed(unsafe { self.values.get_unchecked(i) })
         }
     }
 
@@ -161,6 +208,7 @@ impl<'a, V: BufferTo + Clone + 'a> Run<'a, V> for Process<'a, V> {
             pc: 0,
             buf: Vec::new(),
             stack: Vec::new(),
+            values: Vec::new(),
             template: self,
             parameters: parameters,
         }
@@ -402,6 +450,29 @@ mod test {
             .unwrap();
 
         assert_eq!("Hello Stack 2", res);
+    }
+
+    #[test]
+    fn load_binding_from_const_output_binding() {
+        let funs = HashMap::new();
+        let mut i = Interpreter::new();
+        let p = i.build_processor(
+            Template::<Value>::empty()
+                .push_constant(Constant(1), Value::Str("Hello Binding".into()))
+                .push_instructions(vec![
+                    Instruction::Load(Binding(2), Mem::Const(Constant(1))),
+                    Instruction::Output(Mem::Binding(Binding(2))),
+                ]),
+            &funs
+        ).unwrap();
+
+        let mut res = String::new();
+
+        p.run(Options::empty())
+            .read_to_string(&mut res)
+            .unwrap();
+
+        assert_eq!("Hello Binding", res);
     }
 
     #[test]

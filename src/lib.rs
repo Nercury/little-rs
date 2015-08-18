@@ -7,6 +7,7 @@
 
 #![feature(drain)]
 #![feature(custom_derive)]
+#![feature(vec_resize)]
 
 use std::collections::HashMap;
 use std::io;
@@ -74,8 +75,6 @@ pub enum Instruction {
     Push(Mem),
     /// Pop specified number of stack items.
     Pop(u16),
-    /// Pop stack item into specified binding.
-    Store(Binding),
     /// Jump to instruction.
     Jump(u16),
     /// Jump to instruction based on `Cond`.
@@ -95,6 +94,10 @@ pub enum Value {
 }
 
 impl BufferTo for Value {
+    fn default() -> Value {
+        Value::Null
+    }
+
     fn buffer_to(&self, buf: &mut Vec<u8>) {
         match *self {
             Value::Null => (),
@@ -142,6 +145,7 @@ pub trait Run<'a, V> {
 
 /// Writes self to growable Vec<u8> buffer.
 pub trait BufferTo {
+    fn default() -> Self;
     fn buffer_to(&self, buf: &mut Vec<u8>);
 }
 
