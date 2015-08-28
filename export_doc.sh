@@ -1,6 +1,11 @@
+echo "DOC=$DOC"
+
 if [ $DOC != "true" ]; then
-   exit;
+    echo "skipping doc export"
+    exit;
 fi
+
+echo "exporting docs"
 
 export PATH=$HOME/.local/bin:$PATH
 cargo doc
