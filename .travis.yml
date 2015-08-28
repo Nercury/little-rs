@@ -1,6 +1,21 @@
 language: rust
-rust:
-  - nightly
+
+matrix:
+  allow_failures:
+    - rust: nightly
+  include:
+    - rust: nightly
+      env: FEATURES=nightly
+    - rust: beta
+      env: FEATURES=''
+    - rust: stable
+      env: FEATURES=''
+    - rust: 1.1.0
+      env: FEATURES=''
+    - rust: 1.0.0
+      env: FEATURES=''
+script:
+   - cargo test --features "$FEATURES"
 
 after_success: |
     cargo doc \

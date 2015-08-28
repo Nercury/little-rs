@@ -5,9 +5,7 @@
 <style>.sidebar { margin-top: 53px }</style>
 */
 
-#![feature(drain)]
-#![feature(custom_derive)]
-#![feature(vec_resize)]
+#![cfg_attr(feature="nightly", feature(drain, vec_resize))]
 
 use std::collections::HashMap;
 use std::io;

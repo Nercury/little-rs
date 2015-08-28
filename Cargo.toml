@@ -7,3 +7,6 @@ repository = "https://github.com/Nercury/little-rs"
 license = "MIT"
 description = "Little interpreter designed as fast template backend."
 readme = "README.md"
+
+[features]
+nightly = []

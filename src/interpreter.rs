@@ -99,7 +99,7 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                         c -= 1;
                     },
                     Instruction::Push(ref loc) => match *loc {
-                        Mem::Binding(i) => unimplemented!(),
+                        Mem::Binding(_i) => unimplemented!(),
                         Mem::Const(i) => self.stack.push(match self.template.constants.get(i) {
                             Some(value) => value.clone(),
                             None => return Err(Error::ConstantMissing(i)),
@@ -112,7 +112,7 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                         Mem::StackTop2 => unimplemented!(),
                     },
                     Instruction::Load(binding, ref loc) => match *loc {
-                        Mem::Binding(i) => unimplemented!(),
+                        Mem::Binding(_i) => unimplemented!(),
                         Mem::Const(i) => {
                             let value = match self.template.constants.get(i) {
                                 Some(value) => value.clone(),
@@ -140,6 +140,7 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
         }
     }
 
+    #[cfg(feature="nightly")]
     fn ensure_capacity_for_index(&mut self, index: usize) {
         let required_len = index + 1;
         if required_len > MAX_VALUES {
@@ -147,6 +148,21 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
         }
         if required_len > self.values.len() {
             self.values.resize(required_len, V::default());
+        }
+    }
+
+    #[cfg(not(feature="nightly"))]
+    fn ensure_capacity_for_index(&mut self, index: usize) {
+        use std::iter;
+
+        let required_len = index + 1;
+        if required_len > MAX_VALUES {
+            panic!("maximum number of values {} reached!", MAX_VALUES);
+        }
+        if required_len > self.values.len() {
+            let missing_len = required_len - self.values.len();
+            self.values.reserve(missing_len);
+            self.values.extend(iter::repeat(V::default()).take(missing_len));
         }
     }
 
@@ -165,18 +181,35 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
         }
     }
 
+    #[cfg(feature="nightly")]
     fn consume_buf(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.buf.len() >= buf.len() {
+        let self_buf_len = self.buf.len();
+        if self_buf_len >= buf.len() {
             for (i, o) in self.buf.drain(..buf.len()).zip(buf.iter_mut()) {
                 *o = i
             }
             Ok(buf.len())
         } else {
-            let len = self.buf.len();
-            for (i, o) in self.buf.drain(..).zip(&mut buf[..len]) {
+            for (i, o) in self.buf.drain(..).zip(&mut buf[..self_buf_len]) {
                 *o = i
             }
-            Ok(len)
+            Ok(self_buf_len)
+        }
+    }
+
+    #[cfg(not(feature="nightly"))]
+    fn consume_buf(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let self_buf_len = self.buf.len();
+        if self_buf_len >= buf.len() {
+            for (_, o) in (0..buf.len()).zip(buf.iter_mut()) {
+                *o = self.buf.remove(0);
+            }
+            Ok(buf.len())
+        } else {
+            for (_, o) in (0..self_buf_len).zip(&mut buf[..self_buf_len]) {
+                *o = self.buf.remove(0)
+            }
+            Ok(self_buf_len)
         }
     }
 }
@@ -203,7 +236,7 @@ impl<'a, V: BufferTo + Clone> io::Read for InterpreterStream<'a, V> {
 pub struct Process<'a, V> {
     instructions: Vec<Instruction>,
     constants: Options<Constant, V>,
-    functions: Options<Function, &'a CallFunction>,
+    _functions: Options<Function, &'a CallFunction>,
 }
 
 impl<'a, V: BufferTo + Clone + 'a> Run<'a, V> for Process<'a, V> {
@@ -241,7 +274,7 @@ impl<'a, V: BufferTo + Clone + 'a> BuildProcessor<'a, V> for Interpreter {
         Ok(Process::<V> {
             instructions: template.instructions,
             constants: template.constants,
-            functions:  match template.functions_template.build(functions) {
+            _functions:  match template.functions_template.build(functions) {
                 Ok(built) => built,
                 Err(options::Error::ParameterMissing(s)) => return Err(FunctionMapError::NotFound(s)),
             },
@@ -253,7 +286,7 @@ impl<'a, V: BufferTo + Clone + 'a> BuildProcessor<'a, V> for Interpreter {
 mod test {
     use std::collections::HashMap;
     use std::io::Read;
-    use super::Error;
+    use std::error::Error;
     use super::super::*;
 
     #[test]
@@ -340,7 +373,7 @@ mod test {
             .err()
             .expect("expected to receive error from read");
 
-        assert_eq!("parameter is missing", res.get_ref().unwrap().description());
+        assert_eq!("parameter is missing", res.description());
     }
 
     #[test]
@@ -384,7 +417,7 @@ mod test {
             .err()
             .expect("expected to receive error from read");
 
-        assert_eq!("constant is missing", res.get_ref().unwrap().description());
+        assert_eq!("constant is missing", res.description());
     }
 
     #[test]
@@ -406,7 +439,7 @@ mod test {
             .err()
             .expect("expected to receive error from read");
 
-        assert_eq!("stack underflow", res.get_ref().unwrap().description());
+        assert_eq!("stack underflow", res.description());
     }
 
     #[test]
