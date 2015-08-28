@@ -1,6 +1,6 @@
 echo "DOC=$DOC"
 
-if [ $DOC != "true" ]; then
+if [ "$DOC" != "true" ]; then
     echo "skipping doc export"
     exit;
 fi
