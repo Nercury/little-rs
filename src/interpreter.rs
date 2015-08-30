@@ -99,7 +99,10 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                         c -= 1;
                     },
                     Instruction::Push(ref loc) => match *loc {
-                        Mem::Binding(_i) => unimplemented!(),
+                        Mem::Binding(i) => {
+                            let value = self.get(i).into_owned();
+                            self.stack.push(value);
+                        },
                         Mem::Const(i) => self.stack.push(match self.template.constants.get(i) {
                             Some(value) => value.clone(),
                             None => return Err(Error::ConstantMissing(i)),
@@ -112,7 +115,10 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                         Mem::StackTop2 => unimplemented!(),
                     },
                     Instruction::Load(binding, ref loc) => match *loc {
-                        Mem::Binding(_i) => unimplemented!(),
+                        Mem::Binding(i) => {
+                            let value = self.get(i).into_owned();
+                            self.set(binding, &value)
+                        },
                         Mem::Const(i) => {
                             let value = match self.template.constants.get(i) {
                                 Some(value) => value.clone(),
@@ -127,8 +133,20 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                             };
                             self.set(binding, &value);
                         },
-                        Mem::StackTop1 => unimplemented!(),
-                        Mem::StackTop2 => unimplemented!(),
+                        Mem::StackTop1 => {
+                            let value = match self.stack.last() {
+                                Some(value) => value.clone(),
+                                None => return Err(Error::StackUnderflow),
+                            };
+                            self.set(binding, &value);
+                        },
+                        Mem::StackTop2 => {
+                            let value = match self.stack.get(self.stack.len() - 2) {
+                                Some(value) => value.clone(),
+                                None => return Err(Error::StackUnderflow),
+                            };
+                            self.set(binding, &value);
+                        },
                     },
                     _ => unimplemented!(),
                 };
@@ -536,6 +554,38 @@ mod test {
             .unwrap();
 
         assert_eq!("Hello Binding", res);
+    }
+
+    #[test]
+    fn load_binding_from_binding_stack1_stack2_output3() {
+        let funs = HashMap::new();
+        let mut i = Interpreter::new();
+        let p = i.build_processor(
+            Template::<Value>::empty()
+                .push_instructions(vec![
+                    Instruction::Load(Binding(0), Mem::Param(Parameter(1))),
+                    Instruction::Load(Binding(2), Mem::Param(Parameter(2))),
+                    Instruction::Load(Binding(1), Mem::Binding(Binding(0))),
+                    Instruction::Push(Mem::Binding(Binding(2))),
+                    Instruction::Push(Mem::Binding(Binding(1))),
+                    Instruction::Load(Binding(3), Mem::StackTop1),
+                    Instruction::Load(Binding(4), Mem::StackTop2),
+                    Instruction::Output(Mem::StackTop1),
+                    Instruction::Output(Mem::StackTop2),
+                ]),
+            &funs
+        ).unwrap();
+
+        let mut res = String::new();
+
+        p.run(Options::new(vec![
+            (Parameter(1), Value::Str("Hello".into())),
+            (Parameter(2), Value::Str("World".into())),
+        ].into_iter().collect()))
+            .read_to_string(&mut res)
+            .unwrap();
+
+        assert_eq!("HelloWorld", res);
     }
 
     #[test]
