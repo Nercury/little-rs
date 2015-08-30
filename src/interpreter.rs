@@ -111,8 +111,20 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                             Some(value) => value.clone(),
                             None => return Err(Error::ParameterMissing(i)),
                         }),
-                        Mem::StackTop1 => unimplemented!(),
-                        Mem::StackTop2 => unimplemented!(),
+                        Mem::StackTop1 => {
+                            let value = match self.stack.last() {
+                                Some(value) => value.clone(),
+                                None => return Err(Error::StackUnderflow),
+                            };
+                            self.stack.push(value);
+                        },
+                        Mem::StackTop2 => {
+                            let value = match self.stack.get(self.stack.len() - 2) {
+                                Some(value) => value.clone(),
+                                None => return Err(Error::StackUnderflow),
+                            };
+                            self.stack.push(value);
+                        },
                     },
                     Instruction::Load(binding, ref loc) => match *loc {
                         Mem::Binding(i) => {
@@ -586,6 +598,35 @@ mod test {
             .unwrap();
 
         assert_eq!("HelloWorld", res);
+    }
+
+    #[test]
+    fn push_from_stack_to_stack() {
+        let funs = HashMap::new();
+        let mut i = Interpreter::new();
+        let p = i.build_processor(
+            Template::<Value>::empty()
+                .push_instructions(vec![
+                    Instruction::Push(Mem::Param(Parameter(1))),
+                    Instruction::Push(Mem::Param(Parameter(2))),
+                    Instruction::Push(Mem::StackTop1),
+                    Instruction::Push(Mem::StackTop2),
+                    Instruction::Output(Mem::StackTop1),
+                    Instruction::Output(Mem::StackTop2),
+                ]),
+            &funs
+        ).unwrap();
+
+        let mut res = String::new();
+
+        p.run(Options::new(vec![
+            (Parameter(1), Value::Str("Hello".into())),
+            (Parameter(2), Value::Str("World".into())),
+        ].into_iter().collect()))
+            .read_to_string(&mut res)
+            .unwrap();
+
+        assert_eq!("WorldWorld", res);
     }
 
     #[test]
