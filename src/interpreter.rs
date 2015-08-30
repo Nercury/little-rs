@@ -16,6 +16,7 @@ use {
     Constant,
     Binding,
     Instruction,
+    Cond,
     Mem,
     Run,
     BufferTo,
@@ -69,28 +70,27 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
         match self.template.instructions.get(self.pc) {
             Some(i) => {
                 match *i {
-                    Instruction::Output(ref m) => match *m {
-                        Mem::Binding(i) => {
-                            // TODO: Move values into another object to avoid clone here.
-                            let value = self.get(i).into_owned();
-                            value.buffer_to(&mut self.buf);
-                        },
-                        Mem::Param(i) => match self.parameters.get(i) {
-                            Some(value) => value.buffer_to(&mut self.buf),
-                            None => return Err(Error::ParameterMissing(i)),
-                        },
-                        Mem::Const(i) => match self.template.constants.get(i) {
-                            Some(value) => value.buffer_to(&mut self.buf),
-                            None => return Err(Error::ConstantMissing(i)),
-                        },
-                        Mem::StackTop1 => match self.stack.last() {
-                            Some(value) => value.buffer_to(&mut self.buf),
-                            None => return Err(Error::StackUnderflow),
-                        },
-                        Mem::StackTop2 => match self.stack.get(self.stack.len() - 2) {
-                            Some(value) => value.buffer_to(&mut self.buf),
-                            None => return Err(Error::StackUnderflow),
-                        },
+                    Instruction::Output(ref m) => {
+                        let value = match *m {
+                            Mem::Binding(i) => self.get(i).into_owned(),
+                            Mem::Param(i) => match self.parameters.get(i) {
+                                Some(value) => value.clone(),
+                                None => return Err(Error::ParameterMissing(i)),
+                            },
+                            Mem::Const(i) => match self.template.constants.get(i) {
+                                Some(value) => value.clone(),
+                                None => return Err(Error::ConstantMissing(i)),
+                            },
+                            Mem::StackTop1 => match self.stack.last() {
+                                Some(value) => value.clone(),
+                                None => return Err(Error::StackUnderflow),
+                            },
+                            Mem::StackTop2 => match self.stack.get(self.stack.len() - 2) {
+                                Some(value) => value.clone(),
+                                None => return Err(Error::StackUnderflow),
+                            },
+                        };
+                        value.buffer_to(&mut self.buf);
                     },
                     Instruction::Pop(mut c) => while c > 0 {
                         if let None = self.stack.pop() {
@@ -98,69 +98,65 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                         }
                         c -= 1;
                     },
-                    Instruction::Push(ref loc) => match *loc {
-                        Mem::Binding(i) => {
-                            let value = self.get(i).into_owned();
-                            self.stack.push(value);
-                        },
-                        Mem::Const(i) => self.stack.push(match self.template.constants.get(i) {
-                            Some(value) => value.clone(),
-                            None => return Err(Error::ConstantMissing(i)),
-                        }),
-                        Mem::Param(i) => self.stack.push(match self.parameters.get(i) {
-                            Some(value) => value.clone(),
-                            None => return Err(Error::ParameterMissing(i)),
-                        }),
-                        Mem::StackTop1 => {
-                            let value = match self.stack.last() {
-                                Some(value) => value.clone(),
-                                None => return Err(Error::StackUnderflow),
-                            };
-                            self.stack.push(value);
-                        },
-                        Mem::StackTop2 => {
-                            let value = match self.stack.get(self.stack.len() - 2) {
-                                Some(value) => value.clone(),
-                                None => return Err(Error::StackUnderflow),
-                            };
-                            self.stack.push(value);
-                        },
-                    },
-                    Instruction::Load(binding, ref loc) => match *loc {
-                        Mem::Binding(i) => {
-                            let value = self.get(i).into_owned();
-                            self.set(binding, &value)
-                        },
-                        Mem::Const(i) => {
-                            let value = match self.template.constants.get(i) {
+                    Instruction::Push(ref loc) => {
+                        let value = match *loc {
+                            Mem::Binding(i) => self.get(i).into_owned(),
+                            Mem::Const(i) => match self.template.constants.get(i) {
                                 Some(value) => value.clone(),
                                 None => return Err(Error::ConstantMissing(i)),
-                            };
-                            self.set(binding, &value);
-                        },
-                        Mem::Param(i) => {
-                            let value = match self.parameters.get(i) {
+                            },
+                            Mem::Param(i) => match self.parameters.get(i) {
                                 Some(value) => value.clone(),
                                 None => return Err(Error::ParameterMissing(i)),
-                            };
-                            self.set(binding, &value);
-                        },
-                        Mem::StackTop1 => {
-                            let value = match self.stack.last() {
+                            },
+                            Mem::StackTop1 => match self.stack.last() {
                                 Some(value) => value.clone(),
                                 None => return Err(Error::StackUnderflow),
-                            };
-                            self.set(binding, &value);
-                        },
-                        Mem::StackTop2 => {
-                            let value = match self.stack.get(self.stack.len() - 2) {
+                            },
+                            Mem::StackTop2 => match self.stack.get(self.stack.len() - 2) {
                                 Some(value) => value.clone(),
                                 None => return Err(Error::StackUnderflow),
-                            };
-                            self.set(binding, &value);
-                        },
+                            },
+                        };
+                        self.stack.push(value);
                     },
-                    _ => unimplemented!(),
+                    Instruction::Load(binding, ref loc) => {
+                        let value = match *loc {
+                            Mem::Binding(i) => self.get(i).into_owned(),
+                            Mem::Const(i) => match self.template.constants.get(i) {
+                                Some(value) => value.clone(),
+                                None => return Err(Error::ConstantMissing(i)),
+                            },
+                            Mem::Param(i) => match self.parameters.get(i) {
+                                Some(value) => value.clone(),
+                                None => return Err(Error::ParameterMissing(i)),
+                            },
+                            Mem::StackTop1 => match self.stack.last() {
+                                Some(value) => value.clone(),
+                                None => return Err(Error::StackUnderflow),
+                            },
+                            Mem::StackTop2 => match self.stack.get(self.stack.len() - 2) {
+                                Some(value) => value.clone(),
+                                None => return Err(Error::StackUnderflow),
+                            },
+                        };
+                        self.set(binding, &value);
+                    },
+                    Instruction::Jump(loc) => {
+                        self.pc = loc as usize;
+                        return Ok(true);
+                    },
+                    Instruction::CondJump(loc, cond) => match cond {
+                        Cond::Eq(mem) => unimplemented!(),
+                        Cond::Gt(mem) => unimplemented!(),
+                        Cond::Gte(mem) => unimplemented!(),
+                        Cond::Lt(mem) => unimplemented!(),
+                        Cond::Lte(mem) => unimplemented!(),
+                        Cond::Ne(mem) => unimplemented!(),
+                    },
+                    Instruction::Call(function, argc, returns) => {
+                        unimplemented!();
+                    },
                 };
                 self.pc += 1;
 
@@ -382,6 +378,33 @@ mod test {
             .unwrap();
 
         assert_eq!("Hello", res);
+    }
+
+    #[test]
+    fn should_jump() {
+        let funs = HashMap::new();
+        let mut i = Interpreter::new();
+        let p = i.build_processor(
+            Template::<Value>::empty()
+                .push_constant(Constant(1), Value::Str("Hello".into()))
+                .push_constant(Constant(2), Value::Str("No output".into()))
+                .push_constant(Constant(3), Value::Str("World".into()))
+                .push_instructions(vec![
+                    Instruction::Output(Mem::Const(Constant(1))),
+                    Instruction::Jump(3),
+                    Instruction::Output(Mem::Const(Constant(2))),
+                    Instruction::Output(Mem::Const(Constant(3))),
+                ]),
+            &funs
+        ).unwrap();
+
+        let mut res = String::new();
+
+        p.run(Options::empty())
+            .read_to_string(&mut res)
+            .unwrap();
+
+        assert_eq!("HelloWorld", res);
     }
 
     #[test]

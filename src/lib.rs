@@ -34,6 +34,7 @@ pub struct Constant(pub u32);
 /// Memory location.
 ///
 /// This may be required by `Output`, `Push` or `Load` instructions.
+#[derive(Copy, Clone)]
 pub enum Mem {
     /// Constant item.
     Const(Constant),
@@ -50,6 +51,7 @@ pub enum Mem {
 /// Jump condition.
 ///
 /// Used by `CondJump` instruction.
+#[derive(Copy, Clone)]
 pub enum Cond {
     /// Jump if stack value equals `Mem`.
     Eq(Mem),
@@ -66,6 +68,7 @@ pub enum Cond {
 }
 
 /// Executable template instruction.
+#[derive(Copy, Clone)]
 pub enum Instruction {
     /// Output specified `Mem`.
     Output(Mem),
