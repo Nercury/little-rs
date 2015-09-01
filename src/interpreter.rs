@@ -5,7 +5,7 @@ use std::io::{ Read };
 use std::collections::HashMap;
 use std::error;
 use std::fmt;
-use std::borrow::{ Cow };
+use std::borrow::Cow;
 
 use options;
 
