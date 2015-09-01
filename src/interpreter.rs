@@ -678,28 +678,40 @@ mod test {
 
     #[test]
     fn output_different_params() {
+        let res = from_instructions_and_params(
+            vec![
+                Instruction::Output(Mem::Param(Parameter(1))),
+                Instruction::Output(Mem::Param(Parameter(3))),
+                Instruction::Output(Mem::Param(Parameter(2))),
+            ],
+            vec![
+                (Parameter(1), Value::Str("Hello".into())),
+                (Parameter(2), Value::Str("World".into())),
+                (Parameter(3), Value::Str(" ".into())),
+            ]
+        );
+
+        assert_eq!("Hello World", res);
+    }
+
+    fn from_instructions_and_params(
+        instructions: Vec<Instruction>,
+        params: Vec<(Parameter, Value)>
+    ) -> String {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
         let p = i.build_processor(
             Template::empty()
-                .push_instructions(vec![
-                    Instruction::Output(Mem::Param(Parameter(1))),
-                    Instruction::Output(Mem::Param(Parameter(3))),
-                    Instruction::Output(Mem::Param(Parameter(2))),
-                ]),
+                .push_instructions(instructions),
             &funs
         ).unwrap();
 
         let mut res = String::new();
 
-        p.run(Options::new(vec![
-            (Parameter(1), Value::Str("Hello".into())),
-            (Parameter(2), Value::Str("World".into())),
-            (Parameter(3), Value::Str(" ".into())),
-        ].into_iter().collect()))
+        p.run(Options::new(params.into_iter().collect()))
             .read_to_string(&mut res)
             .unwrap();
 
-        assert_eq!("Hello World", res);
+        res
     }
 }
