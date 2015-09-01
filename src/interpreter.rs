@@ -5,7 +5,7 @@ use std::io::{ Read };
 use std::collections::HashMap;
 use std::error;
 use std::fmt;
-use std::borrow::Cow;
+use std::borrow::{ Cow };
 
 use options;
 
@@ -30,10 +30,79 @@ use {
 pub struct InterpreterStream<'a, V: 'a> {
     pc: usize,
     buf: Vec<u8>,
+    values: Values<'a, V>,
+}
+
+struct Values<'a, V: 'a> {
     stack: Vec<V>,
     values: Vec<V>,
-    template: &'a Process<'a, V>,
     parameters: Options<Parameter, V>,
+    template: &'a Process<'a, V>,
+}
+
+impl<'a, V: Clone + BufferTo> Values<'a, V> {
+    fn get_mem_value(&self, mem: &Mem) -> Result<Cow<V>, Error> {
+        Ok(match *mem {
+            Mem::Binding(i) => self.get(i),
+            Mem::Param(i) => match self.parameters.get(i) {
+                Some(value) => Cow::Borrowed(value),
+                None => return Err(Error::ParameterMissing(i)),
+            },
+            Mem::Const(i) => match self.template.constants.get(i) {
+                Some(value) => Cow::Borrowed(value),
+                None => return Err(Error::ConstantMissing(i)),
+            },
+            Mem::StackTop1 => match self.stack.last() {
+                Some(value) => Cow::Borrowed(value),
+                None => return Err(Error::StackUnderflow),
+            },
+            Mem::StackTop2 => match self.stack.get(self.stack.len() - 2) {
+                Some(value) => Cow::Borrowed(value),
+                None => return Err(Error::StackUnderflow),
+            },
+        })
+    }
+
+    fn set(&mut self, Binding(index): Binding, value: V) {
+        let i = index as usize;
+        self.ensure_capacity_for_index(i);
+        * unsafe { self.values.get_unchecked_mut(i) } = value;
+    }
+
+    fn get<'r>(&'r self, Binding(index): Binding) -> Cow<'r, V> {
+        let i = index as usize;
+        if i >= self.values.len() {
+            Cow::Owned(V::default())
+        } else {
+            Cow::Borrowed(self.values.get(i).unwrap())
+        }
+    }
+
+    #[cfg(feature="nightly")]
+    fn ensure_capacity_for_index(&mut self, index: usize) {
+        let required_len = index + 1;
+        if required_len > MAX_VALUES {
+            panic!("maximum number of values {} reached!", MAX_VALUES);
+        }
+        if required_len > self.values.len() {
+            self.values.resize(required_len, V::default());
+        }
+    }
+
+    #[cfg(not(feature="nightly"))]
+    fn ensure_capacity_for_index(&mut self, index: usize) {
+        use std::iter;
+
+        let required_len = index + 1;
+        if required_len > MAX_VALUES {
+            panic!("maximum number of values {} reached!", MAX_VALUES);
+        }
+        if required_len > self.values.len() {
+            let missing_len = required_len - self.values.len();
+            self.values.reserve(missing_len);
+            self.values.extend(iter::repeat(V::default()).take(missing_len));
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -67,80 +136,34 @@ const MAX_VALUES: usize = 500000;
 
 impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
     fn execute(&mut self) -> Result<bool, Error>  {
-        match self.template.instructions.get(self.pc) {
+        match self.values.template.instructions.get(self.pc) {
             Some(i) => {
                 match *i {
                     Instruction::Output(ref m) => {
-                        let value = match *m {
-                            Mem::Binding(i) => self.get(i).into_owned(),
-                            Mem::Param(i) => match self.parameters.get(i) {
-                                Some(value) => value.clone(),
-                                None => return Err(Error::ParameterMissing(i)),
-                            },
-                            Mem::Const(i) => match self.template.constants.get(i) {
-                                Some(value) => value.clone(),
-                                None => return Err(Error::ConstantMissing(i)),
-                            },
-                            Mem::StackTop1 => match self.stack.last() {
-                                Some(value) => value.clone(),
-                                None => return Err(Error::StackUnderflow),
-                            },
-                            Mem::StackTop2 => match self.stack.get(self.stack.len() - 2) {
-                                Some(value) => value.clone(),
-                                None => return Err(Error::StackUnderflow),
-                            },
-                        };
-                        value.buffer_to(&mut self.buf);
+                        match self.values.get_mem_value(m) {
+                            Ok(value) => value.buffer_to(&mut self.buf),
+                            Err(e) => return Err(e),
+                        }
                     },
                     Instruction::Pop(mut c) => while c > 0 {
-                        if let None = self.stack.pop() {
+                        if let None = self.values.stack.pop() {
                             return Err(Error::StackUnderflow);
                         }
                         c -= 1;
                     },
-                    Instruction::Push(ref loc) => {
-                        let value = match *loc {
-                            Mem::Binding(i) => self.get(i).into_owned(),
-                            Mem::Const(i) => match self.template.constants.get(i) {
-                                Some(value) => value.clone(),
-                                None => return Err(Error::ConstantMissing(i)),
-                            },
-                            Mem::Param(i) => match self.parameters.get(i) {
-                                Some(value) => value.clone(),
-                                None => return Err(Error::ParameterMissing(i)),
-                            },
-                            Mem::StackTop1 => match self.stack.last() {
-                                Some(value) => value.clone(),
-                                None => return Err(Error::StackUnderflow),
-                            },
-                            Mem::StackTop2 => match self.stack.get(self.stack.len() - 2) {
-                                Some(value) => value.clone(),
-                                None => return Err(Error::StackUnderflow),
-                            },
+                    Instruction::Push(ref m) => {
+                        let value = match self.values.get_mem_value(m) {
+                            Ok(value) => value.into_owned(),
+                            Err(e) => return Err(e),
                         };
-                        self.stack.push(value);
+                        self.values.stack.push(value);
                     },
-                    Instruction::Load(binding, ref loc) => {
-                        let value = match *loc {
-                            Mem::Binding(i) => self.get(i).into_owned(),
-                            Mem::Const(i) => match self.template.constants.get(i) {
-                                Some(value) => value.clone(),
-                                None => return Err(Error::ConstantMissing(i)),
-                            },
-                            Mem::Param(i) => match self.parameters.get(i) {
-                                Some(value) => value.clone(),
-                                None => return Err(Error::ParameterMissing(i)),
-                            },
-                            Mem::StackTop1 => match self.stack.last() {
-                                Some(value) => value.clone(),
-                                None => return Err(Error::StackUnderflow),
-                            },
-                            Mem::StackTop2 => match self.stack.get(self.stack.len() - 2) {
-                                Some(value) => value.clone(),
-                                None => return Err(Error::StackUnderflow),
-                            },
+                    Instruction::Load(binding, ref m) => {
+                        let value = match self.values.get_mem_value(m) {
+                            Ok(value) => value.into_owned(),
+                            Err(e) => return Err(e),
                         };
-                        self.set(binding, &value);
+                        self.values.set(binding, value);
                     },
                     Instruction::Jump(loc) => {
                         self.pc = loc as usize;
@@ -163,47 +186,6 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                 Ok(true)
             },
             None => Ok(false),
-        }
-    }
-
-    #[cfg(feature="nightly")]
-    fn ensure_capacity_for_index(&mut self, index: usize) {
-        let required_len = index + 1;
-        if required_len > MAX_VALUES {
-            panic!("maximum number of values {} reached!", MAX_VALUES);
-        }
-        if required_len > self.values.len() {
-            self.values.resize(required_len, V::default());
-        }
-    }
-
-    #[cfg(not(feature="nightly"))]
-    fn ensure_capacity_for_index(&mut self, index: usize) {
-        use std::iter;
-
-        let required_len = index + 1;
-        if required_len > MAX_VALUES {
-            panic!("maximum number of values {} reached!", MAX_VALUES);
-        }
-        if required_len > self.values.len() {
-            let missing_len = required_len - self.values.len();
-            self.values.reserve(missing_len);
-            self.values.extend(iter::repeat(V::default()).take(missing_len));
-        }
-    }
-
-    fn set(&mut self, Binding(index): Binding, value: &V) {
-        let i = index as usize;
-        self.ensure_capacity_for_index(i);
-        * unsafe { self.values.get_unchecked_mut(i) } = value.clone();
-    }
-
-    fn get<'r>(&'r mut self, Binding(index): Binding) -> Cow<'r, V> {
-        let i = index as usize;
-        if i >= self.values.len() {
-            Cow::Owned(V::default())
-        } else {
-            Cow::Borrowed(unsafe { self.values.get_unchecked(i) })
         }
     }
 
@@ -272,10 +254,12 @@ impl<'a, V: BufferTo + Clone + 'a> Run<'a, V> for Process<'a, V> {
         InterpreterStream {
             pc: 0,
             buf: Vec::new(),
-            stack: Vec::new(),
-            values: Vec::new(),
-            template: self,
-            parameters: parameters,
+            values: Values {
+                stack: Vec::new(),
+                values: Vec::new(),
+                template: self,
+                parameters: parameters,
+            }
         }
     }
 }
