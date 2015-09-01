@@ -316,98 +316,6 @@ mod test {
     use super::super::*;
 
     #[test]
-    fn exit() {
-        let funs = HashMap::new();
-        let mut i = Interpreter::new();
-        let p = i.build_processor(Template::empty(), &funs).unwrap();
-
-        let mut res = String::new();
-        p.run(Options::<Parameter, Value>::empty())
-            .read_to_string(&mut res)
-            .unwrap();
-
-        assert_eq!("", res);
-    }
-
-    #[test]
-    fn output_param() {
-        // higher level example
-        //
-        // let env = Staging::new(Interpreter::new())
-        //     .push_function("do_things", || 1)
-        //     .push_loader(|file| {
-        //         Some(match file {
-        //             "example.tmp" => Source::empty()
-        //                 .push_instructions(vec![
-        //                     Command::Output(Scope::Param("text"))
-        //                 ])
-        //                 .into()
-        //                 .unwrap()
-        //             _ => return None,
-        //         })
-        //     })
-        //     .finalize()
-        //     .unwrap();
-        //
-        // let mut res = String::new();
-        //
-        // let p = env.load("example.tmp")
-        //     .unwrap()
-        //     .run(vec![
-        //         ("text", "Hello".into())
-        //     ])
-        //     .unwrap()
-        //     .read_to_string(&mut res);
-
-        let funs = HashMap::new();
-        let mut i = Interpreter::new();
-        let p = i.build_processor(
-            Template::empty()
-                .push_instructions(vec![
-                    Instruction::Output(Mem::Param(Parameter(1)))
-                ]),
-            &funs
-        ).unwrap();
-
-        let mut res = String::new();
-
-        p.run(Options::new(vec![
-            (Parameter(1), Value::Str("Hello".into()))
-        ].into_iter().collect()))
-            .read_to_string(&mut res)
-            .unwrap();
-
-        assert_eq!("Hello", res);
-    }
-
-    #[test]
-    fn should_jump() {
-        let funs = HashMap::new();
-        let mut i = Interpreter::new();
-        let p = i.build_processor(
-            Template::<Value>::empty()
-                .push_constant(Constant(1), Value::Str("Hello".into()))
-                .push_constant(Constant(2), Value::Str("No output".into()))
-                .push_constant(Constant(3), Value::Str("World".into()))
-                .push_instructions(vec![
-                    Instruction::Output(Mem::Const(Constant(1))),
-                    Instruction::Jump(3),
-                    Instruction::Output(Mem::Const(Constant(2))),
-                    Instruction::Output(Mem::Const(Constant(3))),
-                ]),
-            &funs
-        ).unwrap();
-
-        let mut res = String::new();
-
-        p.run(Options::empty())
-            .read_to_string(&mut res)
-            .unwrap();
-
-        assert_eq!("HelloWorld", res);
-    }
-
-    #[test]
     fn error_if_missing_param() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
@@ -427,28 +335,6 @@ mod test {
             .expect("expected to receive error from read");
 
         assert_eq!("parameter is missing", res.description());
-    }
-
-    #[test]
-    fn output_const() {
-        let funs = HashMap::new();
-        let mut i = Interpreter::new();
-        let p = i.build_processor(
-            Template::empty()
-                .push_constant(Constant(1), Value::Str("Const Hello".into()))
-                .push_instructions(vec![
-                    Instruction::Output(Mem::Const(Constant(1)))
-                ]),
-            &funs
-        ).unwrap();
-
-        let mut res = String::new();
-
-        p.run(Options::<Parameter, Value>::empty())
-            .read_to_string(&mut res)
-            .unwrap();
-
-        assert_eq!("Const Hello", res);
     }
 
     #[test]
@@ -496,182 +382,202 @@ mod test {
     }
 
     #[test]
+    fn exit() {
+        let res = from_instructions_and_params(Vec::new(), Vec::new());
+        assert_eq!("", res);
+    }
+
+    #[test]
+    fn output_param() {
+        // higher level example
+        //
+        // let env = Staging::new(Interpreter::new())
+        //     .push_function("do_things", || 1)
+        //     .push_loader(|file| {
+        //         Some(match file {
+        //             "example.tmp" => Source::empty()
+        //                 .push_instructions(vec![
+        //                     Command::Output(Scope::Param("text"))
+        //                 ])
+        //                 .into()
+        //                 .unwrap()
+        //             _ => return None,
+        //         })
+        //     })
+        //     .finalize()
+        //     .unwrap();
+        //
+        // let mut res = String::new();
+        //
+        // let p = env.load("example.tmp")
+        //     .unwrap()
+        //     .run(vec![
+        //         ("text", "Hello".into())
+        //     ])
+        //     .unwrap()
+        //     .read_to_string(&mut res);
+
+        let res = from_instructions_and_params(
+            vec![
+                Instruction::Output(Mem::Param(Parameter(1)))
+            ],
+            vec![
+                (Parameter(1), Value::Str("Hello".into()))
+            ]
+        );
+
+        assert_eq!("Hello", res);
+    }
+
+    #[test]
+    fn should_jump() {
+        let res = from_instructions_and_constants(
+            vec![
+                Instruction::Output(Mem::Const(Constant(1))),
+                Instruction::Jump(3),
+                Instruction::Output(Mem::Const(Constant(2))),
+                Instruction::Output(Mem::Const(Constant(3))),
+            ],
+            vec![
+                (Constant(1), Value::Str("Hello".into())),
+                (Constant(2), Value::Str("No output".into())),
+                (Constant(3), Value::Str("World".into())),
+            ]
+        );
+
+        assert_eq!("HelloWorld", res);
+    }
+
+    #[test]
+    fn output_const() {
+        let res = from_instructions_and_constants(
+            vec![
+                Instruction::Output(Mem::Const(Constant(1)))
+            ],
+            vec![
+                (Constant(1), Value::Str("Const Hello".into()))
+            ]
+        );
+
+        assert_eq!("Const Hello", res);
+    }
+
+    #[test]
     fn push_const_output_stack_top1() {
-        let funs = HashMap::new();
-        let mut i = Interpreter::new();
-        let p = i.build_processor(
-            Template::<Value>::empty()
-                .push_constant(Constant(1), Value::Str("Hello Stack 1".into()))
-                .push_instructions(vec![
-                    Instruction::Push(Mem::Const(Constant(1))),
-                    Instruction::Output(Mem::StackTop1),
-                ]),
-            &funs
-        ).unwrap();
-
-        let mut res = String::new();
-
-        p.run(Options::empty())
-            .read_to_string(&mut res)
-            .unwrap();
+        let res = from_instructions_and_constants(
+            vec![
+                Instruction::Push(Mem::Const(Constant(1))),
+                Instruction::Output(Mem::StackTop1),
+            ],
+            vec![
+                (Constant(1), Value::Str("Hello Stack 1".into()))
+            ]
+        );
 
         assert_eq!("Hello Stack 1", res);
     }
 
     #[test]
     fn push_params_output_stack_top2() {
-        let funs = HashMap::new();
-        let mut i = Interpreter::new();
-        let p = i.build_processor(
-            Template::<Value>::empty()
-                .push_instructions(vec![
-                    Instruction::Push(Mem::Param(Parameter(2))),
-                    Instruction::Push(Mem::Param(Parameter(1))),
-                    Instruction::Output(Mem::StackTop2),
-                ]),
-            &funs
-        ).unwrap();
-
-        let mut res = String::new();
-
-        p.run(Options::new(vec![
-            (Parameter(1), Value::Str("Do not show this".into())),
-            (Parameter(2), Value::Str("Hello Stack 2".into())),
-        ].into_iter().collect()))
-            .read_to_string(&mut res)
-            .unwrap();
+        let res = from_instructions_and_params(
+            vec![
+                Instruction::Push(Mem::Param(Parameter(2))),
+                Instruction::Push(Mem::Param(Parameter(1))),
+                Instruction::Output(Mem::StackTop2),
+            ],
+            vec![
+                (Parameter(1), Value::Str("Do not show this".into())),
+                (Parameter(2), Value::Str("Hello Stack 2".into())),
+            ]
+        );
 
         assert_eq!("Hello Stack 2", res);
     }
 
     #[test]
     fn load_binding_from_const_output_binding() {
-        let funs = HashMap::new();
-        let mut i = Interpreter::new();
-        let p = i.build_processor(
-            Template::<Value>::empty()
-                .push_constant(Constant(1), Value::Str("Hello Binding".into()))
-                .push_instructions(vec![
-                    Instruction::Load(Binding(2), Mem::Const(Constant(1))),
-                    Instruction::Output(Mem::Binding(Binding(2))),
-                ]),
-            &funs
-        ).unwrap();
-
-        let mut res = String::new();
-
-        p.run(Options::empty())
-            .read_to_string(&mut res)
-            .unwrap();
+        let res = from_instructions_and_constants(
+            vec![
+                Instruction::Load(Binding(2), Mem::Const(Constant(1))),
+                Instruction::Output(Mem::Binding(Binding(2))),
+            ],
+            vec![
+                (Constant(1), Value::Str("Hello Binding".into()))
+            ]
+        );
 
         assert_eq!("Hello Binding", res);
     }
 
     #[test]
     fn load_binding_from_param_output_binding() {
-        let funs = HashMap::new();
-        let mut i = Interpreter::new();
-        let p = i.build_processor(
-            Template::<Value>::empty()
-                .push_instructions(vec![
-                    Instruction::Load(Binding(0), Mem::Param(Parameter(2))),
-                    Instruction::Output(Mem::Binding(Binding(0))),
-                ]),
-            &funs
-        ).unwrap();
-
-        let mut res = String::new();
-
-        p.run(Options::new(vec![
-            (Parameter(2), Value::Str("Hello Binding".into())),
-        ].into_iter().collect()))
-            .read_to_string(&mut res)
-            .unwrap();
+        let res = from_instructions_and_params(
+            vec![
+                Instruction::Load(Binding(0), Mem::Param(Parameter(2))),
+                Instruction::Output(Mem::Binding(Binding(0))),
+            ],
+            vec![
+                (Parameter(2), Value::Str("Hello Binding".into())),
+            ]
+        );
 
         assert_eq!("Hello Binding", res);
     }
 
     #[test]
     fn load_binding_from_binding_stack1_stack2_output3() {
-        let funs = HashMap::new();
-        let mut i = Interpreter::new();
-        let p = i.build_processor(
-            Template::<Value>::empty()
-                .push_instructions(vec![
-                    Instruction::Load(Binding(0), Mem::Param(Parameter(1))),
-                    Instruction::Load(Binding(2), Mem::Param(Parameter(2))),
-                    Instruction::Load(Binding(1), Mem::Binding(Binding(0))),
-                    Instruction::Push(Mem::Binding(Binding(2))),
-                    Instruction::Push(Mem::Binding(Binding(1))),
-                    Instruction::Load(Binding(3), Mem::StackTop1),
-                    Instruction::Load(Binding(4), Mem::StackTop2),
-                    Instruction::Output(Mem::StackTop1),
-                    Instruction::Output(Mem::StackTop2),
-                ]),
-            &funs
-        ).unwrap();
-
-        let mut res = String::new();
-
-        p.run(Options::new(vec![
-            (Parameter(1), Value::Str("Hello".into())),
-            (Parameter(2), Value::Str("World".into())),
-        ].into_iter().collect()))
-            .read_to_string(&mut res)
-            .unwrap();
+        let res = from_instructions_and_params(
+            vec![
+                Instruction::Load(Binding(0), Mem::Param(Parameter(1))),
+                Instruction::Load(Binding(2), Mem::Param(Parameter(2))),
+                Instruction::Load(Binding(1), Mem::Binding(Binding(0))),
+                Instruction::Push(Mem::Binding(Binding(2))),
+                Instruction::Push(Mem::Binding(Binding(1))),
+                Instruction::Load(Binding(3), Mem::StackTop1),
+                Instruction::Load(Binding(4), Mem::StackTop2),
+                Instruction::Output(Mem::StackTop1),
+                Instruction::Output(Mem::StackTop2),
+            ],
+            vec![
+                (Parameter(1), Value::Str("Hello".into())),
+                (Parameter(2), Value::Str("World".into())),
+            ]
+        );
 
         assert_eq!("HelloWorld", res);
     }
 
     #[test]
     fn push_from_stack_to_stack() {
-        let funs = HashMap::new();
-        let mut i = Interpreter::new();
-        let p = i.build_processor(
-            Template::<Value>::empty()
-                .push_instructions(vec![
-                    Instruction::Push(Mem::Param(Parameter(1))),
-                    Instruction::Push(Mem::Param(Parameter(2))),
-                    Instruction::Push(Mem::StackTop1),
-                    Instruction::Push(Mem::StackTop2),
-                    Instruction::Output(Mem::StackTop1),
-                    Instruction::Output(Mem::StackTop2),
-                ]),
-            &funs
-        ).unwrap();
-
-        let mut res = String::new();
-
-        p.run(Options::new(vec![
-            (Parameter(1), Value::Str("Hello".into())),
-            (Parameter(2), Value::Str("World".into())),
-        ].into_iter().collect()))
-            .read_to_string(&mut res)
-            .unwrap();
+        let res = from_instructions_and_params(
+            vec![
+                Instruction::Push(Mem::Param(Parameter(1))),
+                Instruction::Push(Mem::Param(Parameter(2))),
+                Instruction::Push(Mem::StackTop1),
+                Instruction::Push(Mem::StackTop2),
+                Instruction::Output(Mem::StackTop1),
+                Instruction::Output(Mem::StackTop2),
+            ],
+            vec![
+                (Parameter(1), Value::Str("Hello".into())),
+                (Parameter(2), Value::Str("World".into())),
+            ]
+        );
 
         assert_eq!("WorldWorld", res);
     }
 
     #[test]
     fn output_param_twice() {
-        let funs = HashMap::new();
-        let mut i = Interpreter::new();
-        let p = i.build_processor(
-            Template::empty()
-                .push_instructions(vec![
-                    Instruction::Output(Mem::Param(Parameter(1))),
-                    Instruction::Output(Mem::Param(Parameter(1))),
-                ]),
-            &funs
-        ).unwrap();
-
-        let mut res = String::new();
-
-        p.run(Options::new(vec![
-            (Parameter(1), Value::Str("Hello".into())),
-        ].into_iter().collect()))
-            .read_to_string(&mut res)
-            .unwrap();
+        let res = from_instructions_and_params(
+            vec![
+                Instruction::Output(Mem::Param(Parameter(1))),
+                Instruction::Output(Mem::Param(Parameter(1))),
+            ],
+            vec![
+                (Parameter(1), Value::Str("Hello".into())),
+            ]
+        );
 
         assert_eq!("HelloHello", res);
     }
@@ -709,6 +615,33 @@ mod test {
         let mut res = String::new();
 
         p.run(Options::new(params.into_iter().collect()))
+            .read_to_string(&mut res)
+            .unwrap();
+
+        res
+    }
+
+    fn from_instructions_and_constants(
+        instructions: Vec<Instruction>,
+        constants: Vec<(Constant, Value)>
+    ) -> String {
+        let mut template = Template::empty()
+            .push_instructions(instructions);
+
+        for (constant, value) in constants {
+            template = template.push_constant(constant, value);
+        }
+
+        let funs = HashMap::new();
+        let mut i = Interpreter::new();
+        let p = i.build_processor(
+            template,
+            &funs
+        ).unwrap();
+
+        let mut res = String::new();
+
+        p.run(Options::empty())
             .read_to_string(&mut res)
             .unwrap();
 
