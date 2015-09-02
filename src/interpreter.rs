@@ -170,11 +170,11 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                         };
                         let should_jump = match cond {
                             Cond::Eq => stack == value_ref,
-                            Cond::Gt => unimplemented!(),
-                            Cond::Gte => unimplemented!(),
-                            Cond::Lt => unimplemented!(),
-                            Cond::Lte => unimplemented!(),
-                            Cond::Ne => unimplemented!(),
+                            Cond::Gt => stack > value_ref,
+                            Cond::Gte => stack >= value_ref,
+                            Cond::Lt => stack < value_ref,
+                            Cond::Lte => stack <= value_ref,
+                            Cond::Ne => stack != value_ref,
                         };
                         if should_jump {
                             self.pc = loc as usize;
@@ -446,6 +446,60 @@ mod test {
     }
 
     #[test]
+    fn should_jump_if_gt() {
+        assert!(test_cond_jump(2, 1, Cond::Gt));
+    }
+
+    #[test]
+    fn should_not_jump_if_not_gt() {
+        assert!(!test_cond_jump(2, 2, Cond::Gt));
+        assert!(!test_cond_jump(1, 2, Cond::Gt));
+    }
+
+    #[test]
+    fn should_jump_if_gte() {
+        assert!(test_cond_jump(2, 1, Cond::Gte));
+        assert!(test_cond_jump(2, 2, Cond::Gte));
+    }
+
+    #[test]
+    fn should_not_jump_if_not_gte() {
+        assert!(!test_cond_jump(1, 2, Cond::Gte));
+    }
+
+    #[test]
+    fn should_jump_if_lt() {
+        assert!(test_cond_jump(1, 2, Cond::Lt));
+    }
+
+    #[test]
+    fn should_not_jump_if_not_lt() {
+        assert!(!test_cond_jump(2, 2, Cond::Lt));
+        assert!(!test_cond_jump(2, 1, Cond::Lt));
+    }
+
+    #[test]
+    fn should_jump_if_lte() {
+        assert!(test_cond_jump(1, 2, Cond::Lte));
+        assert!(test_cond_jump(2, 2, Cond::Lte));
+    }
+
+    #[test]
+    fn should_not_jump_if_not_lte() {
+        assert!(!test_cond_jump(2, 1, Cond::Lte));
+    }
+
+    #[test]
+    fn should_jump_if_ne() {
+        assert!(test_cond_jump(2, 1, Cond::Ne));
+    }
+
+    #[test]
+    fn should_not_jump_if_not_ne() {
+        assert!(!test_cond_jump(2, 2, Cond::Ne));
+    }
+
+    #[test]
     fn output_const() {
         let res = from_instructions_and_constants(
             vec![
@@ -645,8 +699,8 @@ mod test {
         res
     }
 
-    /// Check if a compared to b using condition produces a jump.
-    fn test_cond_jump(a: i64, b: i64, cond: Cond) -> bool {
+    /// Check if stack compared to mem using condition produces a jump.
+    fn test_cond_jump(stack: i64, mem: i64, cond: Cond) -> bool {
         let res = from_instructions_and_constants(
             vec![
                 Instruction::Push(Mem::Const(Constant(2))),
@@ -655,8 +709,8 @@ mod test {
                 Instruction::Output(Mem::Const(Constant(3))), // should skip to this line if jumped
             ],
             vec![
-                (Constant(1), Value::Int(a)),
-                (Constant(2), Value::Int(b)),
+                (Constant(1), Value::Int(mem)),
+                (Constant(2), Value::Int(stack)),
                 (Constant(3), Value::Int(1)),
             ]
         );

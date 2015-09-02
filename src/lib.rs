@@ -87,7 +87,7 @@ pub enum Instruction {
 }
 
 /// Simple value implementation.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, PartialOrd)]
 pub enum Value {
     Null,
     Int(i64),
@@ -145,7 +145,7 @@ pub trait Run<'a, V> {
 }
 
 /// Writes self to growable Vec<u8> buffer.
-pub trait BufferTo : Eq {
+pub trait BufferTo : Eq + PartialOrd {
     fn default() -> Self;
     fn buffer_to(&self, buf: &mut Vec<u8>);
 }
