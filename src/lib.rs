@@ -54,17 +54,17 @@ pub enum Mem {
 #[derive(Copy, Clone)]
 pub enum Cond {
     /// Jump if stack value equals `Mem`.
-    Eq(Mem),
+    Eq,
     /// Jump if stack value not equals `Mem`.
-    Ne(Mem),
+    Ne,
     /// Jump if stack value greater than `Mem`.
-    Gt(Mem),
+    Gt,
     /// Jump if stack value less than `Mem`.
-    Lt(Mem),
+    Lt,
     /// Jump if stack value greater than or equals `Mem`.
-    Gte(Mem),
+    Gte,
     /// Jump if stack value less than or equals `Mem`.
-    Lte(Mem),
+    Lte,
 }
 
 /// Executable template instruction.
@@ -79,7 +79,7 @@ pub enum Instruction {
     /// Jump to instruction.
     Jump(u16),
     /// Jump to instruction based on `Cond`.
-    CondJump(u16, Cond),
+    CondJump(u16, Mem, Cond),
     /// Call function with specified amount of stack items and store result to stack if bool = true.
     Call(Function, u8, bool),
     /// Copy value from `Mem` to `Binding`.

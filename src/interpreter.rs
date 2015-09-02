@@ -161,20 +161,20 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                         self.pc = loc as usize;
                         return Ok(true);
                     },
-                    Instruction::CondJump(loc, cond) => {
+                    Instruction::CondJump(loc, ref m, cond) => {
+                        let value = try!(self.values.get_mem_value(m));
+                        let value_ref = value.as_ref();
                         let stack = match self.values.stack.last() {
                             Some(value) => value,
                             None => return Err(Error::StackUnderflow),
                         };
                         let should_jump = match cond {
-                            Cond::Eq(mem) => {
-                                try!(self.values.get_mem_value(&mem)).as_ref() == stack
-                            },
-                            Cond::Gt(mem) => unimplemented!(),
-                            Cond::Gte(mem) => unimplemented!(),
-                            Cond::Lt(mem) => unimplemented!(),
-                            Cond::Lte(mem) => unimplemented!(),
-                            Cond::Ne(mem) => unimplemented!(),
+                            Cond::Eq => stack == value_ref,
+                            Cond::Gt => unimplemented!(),
+                            Cond::Gte => unimplemented!(),
+                            Cond::Lt => unimplemented!(),
+                            Cond::Lte => unimplemented!(),
+                            Cond::Ne => unimplemented!(),
                         };
                         if should_jump {
                             self.pc = loc as usize;
@@ -437,37 +437,12 @@ mod test {
 
     #[test]
     fn should_jump_if_eq() {
-        let res = from_instructions_and_constants(
-            vec![
-                Instruction::Push(Mem::Const(Constant(1))),
-                Instruction::CondJump(3, Cond::Eq(Mem::Const(Constant(1)))),
-                Instruction::Output(Mem::Const(Constant(1))),
-                Instruction::Output(Mem::Const(Constant(1))), // should skip to this line
-            ],
-            vec![
-                (Constant(1), Value::Int(2)),
-            ]
-        );
-
-        assert_eq!("2", res);
+        assert!(test_cond_jump(1, 1, Cond::Eq));
     }
 
     #[test]
     fn should_not_jump_if_not_eq() {
-        let res = from_instructions_and_constants(
-            vec![
-                Instruction::Push(Mem::Const(Constant(1))),
-                Instruction::CondJump(3, Cond::Eq(Mem::Const(Constant(2)))),
-                Instruction::Output(Mem::Const(Constant(1))), // should continue here
-                Instruction::Output(Mem::Const(Constant(1))),
-            ],
-            vec![
-                (Constant(1), Value::Int(2)),
-                (Constant(2), Value::Int(3)),
-            ]
-        );
-
-        assert_eq!("22", res);
+        assert!(!test_cond_jump(2, 3, Cond::Eq));
     }
 
     #[test]
@@ -668,5 +643,28 @@ mod test {
             .unwrap();
 
         res
+    }
+
+    /// Check if a compared to b using condition produces a jump.
+    fn test_cond_jump(a: i64, b: i64, cond: Cond) -> bool {
+        let res = from_instructions_and_constants(
+            vec![
+                Instruction::Push(Mem::Const(Constant(2))),
+                Instruction::CondJump(3, Mem::Const(Constant(1)), cond),
+                Instruction::Output(Mem::Const(Constant(3))), // should continue here if not jumped
+                Instruction::Output(Mem::Const(Constant(3))), // should skip to this line if jumped
+            ],
+            vec![
+                (Constant(1), Value::Int(a)),
+                (Constant(2), Value::Int(b)),
+                (Constant(3), Value::Int(1)),
+            ]
+        );
+
+        match res.as_ref() {
+            "1" => true,
+            "11" => false,
+            v => panic!(format!("test_cond_jump produced unexpected output {:?}", v)),
+        }
     }
 }
