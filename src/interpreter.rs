@@ -33,11 +33,13 @@ pub struct InterpreterStream<'a, V: 'a> {
     values: Values<'a, V>,
 }
 
+const MAX_VALUES: usize = 500000;
+
 struct Values<'a, V: 'a> {
     stack: Vec<V>,
     values: Vec<V>,
     parameters: Options<Parameter, V>,
-    template: &'a Process<'a, V>,
+    process: &'a Process<'a, V>,
 }
 
 impl<'a, V: Clone + BufferTo> Values<'a, V> {
@@ -48,7 +50,7 @@ impl<'a, V: Clone + BufferTo> Values<'a, V> {
                 Some(value) => Cow::Borrowed(value),
                 None => return Err(Error::ParameterMissing(i)),
             },
-            Mem::Const(i) => match self.template.constants.get(i) {
+            Mem::Const(i) => match self.process.constants.get(i) {
                 Some(value) => Cow::Borrowed(value),
                 None => return Err(Error::ConstantMissing(i)),
             },
@@ -109,6 +111,7 @@ impl<'a, V: Clone + BufferTo> Values<'a, V> {
 pub enum Error {
     ParameterMissing(Parameter),
     ConstantMissing(Constant),
+    FunctionMissing(Function),
     StackUnderflow,
 }
 
@@ -117,6 +120,7 @@ impl fmt::Display for Error {
         match *self {
             Error::ParameterMissing(p) => write!(f, "Parameter {:?} is missing.", p),
             Error::ConstantMissing(c) => write!(f, "Constant {:?} is missing.", c),
+            Error::FunctionMissing(c) => write!(f, "Function {:?} is missing.", c),
             Error::StackUnderflow => write!(f, "Attempt to pop empty stack."),
         }
     }
@@ -127,16 +131,15 @@ impl error::Error for Error {
         match *self {
             Error::ParameterMissing(_) => "parameter is missing",
             Error::ConstantMissing(_) => "constant is missing",
+            Error::FunctionMissing(_) => "function is missing",
             Error::StackUnderflow => "stack underflow",
         }
     }
 }
 
-const MAX_VALUES: usize = 500000;
-
 impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
     fn execute(&mut self) -> Result<bool, Error>  {
-        match self.values.template.instructions.get(self.pc) {
+        match self.values.process.instructions.get(self.pc) {
             Some(i) => {
                 match *i {
                     Instruction::Output(ref m) => {
@@ -182,7 +185,17 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                         }
                     },
                     Instruction::Call(function, argc, returns) => {
-                        unimplemented!();
+                        let fun = match self.values.process.functions.get(function) {
+                            Some(f) => f,
+                            None => return Err(Error::FunctionMissing(function)),
+                        };
+
+                        let stack_len = self.values.stack.len();
+                        let result = fun.invoke(&self.values.stack[stack_len - argc as usize .. stack_len]);
+
+                        if returns {
+                            self.values.stack.push(result.unwrap());
+                        }
                     },
                 };
                 self.pc += 1;
@@ -247,7 +260,7 @@ impl<'a, V: BufferTo + Clone> io::Read for InterpreterStream<'a, V> {
 pub struct Process<'a, V> {
     instructions: Vec<Instruction>,
     constants: Options<Constant, V>,
-    _functions: Options<Function, &'a CallFunction>,
+    functions: Options<Function, &'a CallFunction<V>>,
 }
 
 impl<'a, V: BufferTo + Clone + 'a> Run<'a, V> for Process<'a, V> {
@@ -260,7 +273,7 @@ impl<'a, V: BufferTo + Clone + 'a> Run<'a, V> for Process<'a, V> {
             values: Values {
                 stack: Vec::new(),
                 values: Vec::new(),
-                template: self,
+                process: self,
                 parameters: parameters,
             }
         }
@@ -282,12 +295,12 @@ impl<'a, V: BufferTo + Clone + 'a> BuildProcessor<'a, V> for Interpreter {
     fn build_processor(
         &'a mut self,
         template: Template<V>,
-        functions: &'a HashMap<&'a str, &'a (CallFunction + 'a)>
+        functions: &'a HashMap<&'a str, &'a (CallFunction<V> + 'a)>
     ) -> Result<Process<V>, FunctionMapError> {
         Ok(Process::<V> {
             instructions: template.instructions,
             constants: template.constants,
-            _functions:  match template.functions_template.build(functions) {
+            functions:  match template.functions_template.build(functions) {
                 Ok(built) => built,
                 Err(options::Error::ParameterMissing(s)) => return Err(FunctionMapError::NotFound(s)),
             },
@@ -511,6 +524,48 @@ mod test {
         );
 
         assert_eq!("Const Hello", res);
+    }
+
+    #[test]
+    fn run_function() {
+        struct AddOp;
+
+        impl CallFunction<Value> for AddOp {
+            fn invoke<'r>(&self, args: &'r [Value]) -> Option<Value> {
+                Some(match (&args[0], &args[1]) {
+                    (&Value::Int(a), &Value::Int(b)) => Value::Int(a + b),
+                    _ => unimplemented!(),
+                })
+            }
+        }
+
+        let add = AddOp;
+
+        let mut funs = HashMap::new();
+        funs.insert("add", &add as &CallFunction<Value>);
+
+        let mut i = Interpreter::new();
+        let p = i.build_processor(
+            Template::<Value>::empty()
+                .push_function("add", Function(1))
+                .push_constant(Constant(1), Value::Int(2))
+                .push_constant(Constant(2), Value::Int(3))
+                .push_instructions(vec![
+                    Instruction::Push(Mem::Const(Constant(1))),
+                    Instruction::Push(Mem::Const(Constant(2))),
+                    Instruction::Call(Function(1), 2, true),
+                    Instruction::Output(Mem::StackTop1),
+                ]),
+            &funs
+        ).unwrap();
+
+        let mut res = String::new();
+
+        p.run(Options::<Parameter, Value>::empty())
+            .read_to_string(&mut res)
+            .unwrap();
+
+        assert_eq!("5", &res);
     }
 
     #[test]

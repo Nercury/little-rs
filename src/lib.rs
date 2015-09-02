@@ -111,8 +111,8 @@ impl BufferTo for Value {
 /// External template function.
 ///
 /// This function is called from inside processor, and is used to implement various helpers.
-pub trait CallFunction {
-    fn call_function<'a>(&'a [Value]) -> Value where Self: Sized;
+pub trait CallFunction<V> {
+    fn invoke<'r>(&self, &'r [V]) -> Option<V>;
 }
 
 /// Function mapping error.
@@ -133,7 +133,7 @@ pub trait BuildProcessor<'a, V> {
     fn build_processor(
         &'a mut self,
         template: Template<V>,
-        functions: &'a HashMap<&'a str, &'a (CallFunction + 'a)>
+        functions: &'a HashMap<&'a str, &'a (CallFunction<V> + 'a)>
     ) -> Result<Self::Output, FunctionMapError>;
 }
 
