@@ -140,10 +140,8 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
             Some(i) => {
                 match *i {
                     Instruction::Output(ref m) => {
-                        match self.values.get_mem_value(m) {
-                            Ok(value) => value.buffer_to(&mut self.buf),
-                            Err(e) => return Err(e),
-                        }
+                        try!(self.values.get_mem_value(m))
+                            .buffer_to(&mut self.buf);
                     },
                     Instruction::Pop(mut c) => while c > 0 {
                         if let None = self.values.stack.pop() {
@@ -152,17 +150,11 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                         c -= 1;
                     },
                     Instruction::Push(ref m) => {
-                        let value = match self.values.get_mem_value(m) {
-                            Ok(value) => value.into_owned(),
-                            Err(e) => return Err(e),
-                        };
+                        let value = try!(self.values.get_mem_value(m)).into_owned();
                         self.values.stack.push(value);
                     },
                     Instruction::Load(binding, ref m) => {
-                        let value = match self.values.get_mem_value(m) {
-                            Ok(value) => value.into_owned(),
-                            Err(e) => return Err(e),
-                        };
+                        let value = try!(self.values.get_mem_value(m)).into_owned();
                         self.values.set(binding, value);
                     },
                     Instruction::Jump(loc) => {
@@ -170,17 +162,13 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                         return Ok(true);
                     },
                     Instruction::CondJump(loc, cond) => {
-                        let b = match self.values.stack.last() {
+                        let stack = match self.values.stack.last() {
                             Some(value) => value,
                             None => return Err(Error::StackUnderflow),
                         };
                         let should_jump = match cond {
                             Cond::Eq(mem) => {
-                                let a = match self.values.get_mem_value(&mem) {
-                                    Ok(value) => value,
-                                    Err(e) => return Err(e),
-                                };
-                                a.as_ref() == b
+                                try!(self.values.get_mem_value(&mem)).as_ref() == stack
                             },
                             Cond::Gt(mem) => unimplemented!(),
                             Cond::Gte(mem) => unimplemented!(),
@@ -198,7 +186,6 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                     },
                 };
                 self.pc += 1;
-
                 Ok(true)
             },
             None => Ok(false),
@@ -455,7 +442,7 @@ mod test {
                 Instruction::Push(Mem::Const(Constant(1))),
                 Instruction::CondJump(3, Cond::Eq(Mem::Const(Constant(1)))),
                 Instruction::Output(Mem::Const(Constant(1))),
-                Instruction::Output(Mem::Const(Constant(1))),
+                Instruction::Output(Mem::Const(Constant(1))), // should skip to this line
             ],
             vec![
                 (Constant(1), Value::Int(2)),
@@ -463,6 +450,24 @@ mod test {
         );
 
         assert_eq!("2", res);
+    }
+
+    #[test]
+    fn should_not_jump_if_not_eq() {
+        let res = from_instructions_and_constants(
+            vec![
+                Instruction::Push(Mem::Const(Constant(1))),
+                Instruction::CondJump(3, Cond::Eq(Mem::Const(Constant(2)))),
+                Instruction::Output(Mem::Const(Constant(1))), // should continue here
+                Instruction::Output(Mem::Const(Constant(1))),
+            ],
+            vec![
+                (Constant(1), Value::Int(2)),
+                (Constant(2), Value::Int(3)),
+            ]
+        );
+
+        assert_eq!("22", res);
     }
 
     #[test]
