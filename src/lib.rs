@@ -87,7 +87,7 @@ pub enum Instruction {
 }
 
 /// Simple value implementation.
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Value {
     Null,
     Int(i64),
@@ -145,7 +145,7 @@ pub trait Run<'a, V> {
 }
 
 /// Writes self to growable Vec<u8> buffer.
-pub trait BufferTo {
+pub trait BufferTo : Eq {
     fn default() -> Self;
     fn buffer_to(&self, buf: &mut Vec<u8>);
 }

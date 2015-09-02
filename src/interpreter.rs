@@ -169,13 +169,29 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                         self.pc = loc as usize;
                         return Ok(true);
                     },
-                    Instruction::CondJump(loc, cond) => match cond {
-                        Cond::Eq(mem) => unimplemented!(),
-                        Cond::Gt(mem) => unimplemented!(),
-                        Cond::Gte(mem) => unimplemented!(),
-                        Cond::Lt(mem) => unimplemented!(),
-                        Cond::Lte(mem) => unimplemented!(),
-                        Cond::Ne(mem) => unimplemented!(),
+                    Instruction::CondJump(loc, cond) => {
+                        let b = match self.values.stack.last() {
+                            Some(value) => value,
+                            None => return Err(Error::StackUnderflow),
+                        };
+                        let should_jump = match cond {
+                            Cond::Eq(mem) => {
+                                let a = match self.values.get_mem_value(&mem) {
+                                    Ok(value) => value,
+                                    Err(e) => return Err(e),
+                                };
+                                a.as_ref() == b
+                            },
+                            Cond::Gt(mem) => unimplemented!(),
+                            Cond::Gte(mem) => unimplemented!(),
+                            Cond::Lt(mem) => unimplemented!(),
+                            Cond::Lte(mem) => unimplemented!(),
+                            Cond::Ne(mem) => unimplemented!(),
+                        };
+                        if should_jump {
+                            self.pc = loc as usize;
+                            return Ok(true);
+                        }
                     },
                     Instruction::Call(function, argc, returns) => {
                         unimplemented!();
@@ -430,6 +446,23 @@ mod test {
         );
 
         assert_eq!("HelloWorld", res);
+    }
+
+    #[test]
+    fn should_jump_if_eq() {
+        let res = from_instructions_and_constants(
+            vec![
+                Instruction::Push(Mem::Const(Constant(1))),
+                Instruction::CondJump(3, Cond::Eq(Mem::Const(Constant(1)))),
+                Instruction::Output(Mem::Const(Constant(1))),
+                Instruction::Output(Mem::Const(Constant(1))),
+            ],
+            vec![
+                (Constant(1), Value::Int(2)),
+            ]
+        );
+
+        assert_eq!("2", res);
     }
 
     #[test]
