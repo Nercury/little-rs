@@ -528,18 +528,12 @@ mod test {
 
     #[test]
     fn run_function() {
-        struct AddOp;
-
-        impl Function<Value> for AddOp {
-            fn invoke<'r>(&self, args: &'r [Value]) -> Option<Value> {
-                Some(match (&args[0], &args[1]) {
-                    (&Value::Int(a), &Value::Int(b)) => Value::Int(a + b),
-                    _ => unimplemented!(),
-                })
-            }
-        }
-
-        let add = AddOp;
+        let add = |args: &[Value]| {
+            Some(match (&args[0], &args[1]) {
+                (&Value::Int(a), &Value::Int(b)) => Value::Int(a + b),
+                _ => unimplemented!(),
+            })
+        };
 
         let mut funs = HashMap::new();
         funs.insert("add", &add as &Function<Value>);

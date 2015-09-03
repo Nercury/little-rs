@@ -115,6 +115,12 @@ pub trait Function<V> {
     fn invoke<'r>(&self, &'r [V]) -> Option<V>;
 }
 
+impl<V, F: for<'z> Fn(&'z [V]) -> Option<V>> Function<V> for F {
+    fn invoke<'r>(&self, args: &'r [V]) -> Option<V> {
+        self(args)
+    }
+}
+
 /// Call mapping error.
 #[derive(Debug)]
 pub enum CallMapError {
