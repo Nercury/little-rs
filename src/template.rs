@@ -1,7 +1,7 @@
 use {
     Constant,
     Parameter,
-    Function,
+    Call,
     Instruction,
     Options,
     OptionsTemplate,
@@ -11,7 +11,7 @@ use {
 pub struct Template<V> {
     pub constants: Options<Constant, V>,
     pub parameters_template: OptionsTemplate<Parameter>,
-    pub functions_template: OptionsTemplate<Function>,
+    pub calls_template: OptionsTemplate<Call>,
     pub instructions: Vec<Instruction>,
     pub bindings_capacity: u32,
 }
@@ -20,14 +20,14 @@ impl<V> Template<V> {
     pub fn new(
         constants: Options<Constant, V>,
         parameters_template: OptionsTemplate<Parameter>,
-        functions_template: OptionsTemplate<Function>,
+        calls_template: OptionsTemplate<Call>,
         instructions: Vec<Instruction>,
         bindings_capacity: u32,
     ) -> Template<V> {
         Template {
             constants: constants,
             parameters_template: parameters_template,
-            functions_template: functions_template,
+            calls_template: calls_template,
             instructions: instructions,
             bindings_capacity: bindings_capacity,
         }
@@ -37,7 +37,7 @@ impl<V> Template<V> {
         Template {
             constants: Options::empty(),
             parameters_template: OptionsTemplate::empty(),
-            functions_template: OptionsTemplate::empty(),
+            calls_template: OptionsTemplate::empty(),
             instructions: vec![],
             bindings_capacity: 0,
         }
@@ -53,8 +53,8 @@ impl<V> Template<V> {
         self
     }
 
-    pub fn push_function<S: Into<String>>(mut self, key: S, index: Function) -> Self {
-        self.functions_template.push(key, index);
+    pub fn push_call<S: Into<String>>(mut self, key: S, index: Call) -> Self {
+        self.calls_template.push(key, index);
         self
     }
 

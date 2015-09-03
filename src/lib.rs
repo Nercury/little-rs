@@ -26,7 +26,7 @@ pub struct Parameter(pub u32);
 pub struct Binding(pub u32);
 /// Immutable external machine function.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub struct Function(pub u32);
+pub struct Call(pub u32);
 /// Immutable internal machine constant.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Constant(pub u32);
@@ -81,7 +81,7 @@ pub enum Instruction {
     /// Jump to instruction based on `Cond`.
     CondJump(u16, Mem, Cond),
     /// Call function with specified amount of stack items and store result to stack if bool = true.
-    Call(Function, u8, bool),
+    Call(Call, u8, bool),
     /// Copy value from `Mem` to `Binding`.
     Load(Binding, Mem),
 }
@@ -111,13 +111,13 @@ impl BufferTo for Value {
 /// External template function.
 ///
 /// This function is called from inside processor, and is used to implement various helpers.
-pub trait CallFunction<V> {
+pub trait Function<V> {
     fn invoke<'r>(&self, &'r [V]) -> Option<V>;
 }
 
-/// Function mapping error.
+/// Call mapping error.
 #[derive(Debug)]
-pub enum FunctionMapError {
+pub enum CallMapError {
     NotFound(String),
 }
 
@@ -126,15 +126,15 @@ pub enum FunctionMapError {
 /// Consumes `Template` and produces object that has `Run` trait,
 /// so it is possible to call `run` on it.
 ///
-/// Also requires `functions` list that could be mapped to functions required by processor.
+/// Also requires `calls` list that could be mapped to calls required by processor.
 pub trait BuildProcessor<'a, V> {
     type Output: Run<'a, V>;
 
     fn build_processor(
         &'a mut self,
         template: Template<V>,
-        functions: &'a HashMap<&'a str, &'a (CallFunction<V> + 'a)>
-    ) -> Result<Self::Output, FunctionMapError>;
+        calls: &'a HashMap<&'a str, &'a (Function<V> + 'a)>
+    ) -> Result<Self::Output, CallMapError>;
 }
 
 /// Used by processors to produce readable stream based on provided parameters.

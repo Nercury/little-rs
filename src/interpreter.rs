@@ -12,7 +12,7 @@ use options;
 use {
     Options,
     Parameter,
-    Function,
+    Call,
     Constant,
     Binding,
     Instruction,
@@ -22,9 +22,9 @@ use {
     BufferTo,
     Template,
     BuildProcessor,
-    CallFunction,
+    Function,
     Interpreter,
-    FunctionMapError,
+    CallMapError,
 };
 
 pub struct InterpreterStream<'a, V: 'a> {
@@ -111,7 +111,7 @@ impl<'a, V: Clone + BufferTo> Values<'a, V> {
 pub enum Error {
     ParameterMissing(Parameter),
     ConstantMissing(Constant),
-    FunctionMissing(Function),
+    CallMissing(Call),
     StackUnderflow,
 }
 
@@ -120,7 +120,7 @@ impl fmt::Display for Error {
         match *self {
             Error::ParameterMissing(p) => write!(f, "Parameter {:?} is missing.", p),
             Error::ConstantMissing(c) => write!(f, "Constant {:?} is missing.", c),
-            Error::FunctionMissing(c) => write!(f, "Function {:?} is missing.", c),
+            Error::CallMissing(c) => write!(f, "Call {:?} is missing.", c),
             Error::StackUnderflow => write!(f, "Attempt to pop empty stack."),
         }
     }
@@ -131,7 +131,7 @@ impl error::Error for Error {
         match *self {
             Error::ParameterMissing(_) => "parameter is missing",
             Error::ConstantMissing(_) => "constant is missing",
-            Error::FunctionMissing(_) => "function is missing",
+            Error::CallMissing(_) => "call is missing",
             Error::StackUnderflow => "stack underflow",
         }
     }
@@ -184,10 +184,10 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                             return Ok(true);
                         }
                     },
-                    Instruction::Call(function, argc, returns) => {
-                        let fun = match self.values.process.functions.get(function) {
+                    Instruction::Call(call, argc, returns) => {
+                        let fun = match self.values.process.calls.get(call) {
                             Some(f) => f,
-                            None => return Err(Error::FunctionMissing(function)),
+                            None => return Err(Error::CallMissing(call)),
                         };
 
                         let stack_len = self.values.stack.len();
@@ -260,7 +260,7 @@ impl<'a, V: BufferTo + Clone> io::Read for InterpreterStream<'a, V> {
 pub struct Process<'a, V> {
     instructions: Vec<Instruction>,
     constants: Options<Constant, V>,
-    functions: Options<Function, &'a CallFunction<V>>,
+    calls: Options<Call, &'a Function<V>>,
 }
 
 impl<'a, V: BufferTo + Clone + 'a> Run<'a, V> for Process<'a, V> {
@@ -291,18 +291,18 @@ impl<'a, V: BufferTo + Clone + 'a> BuildProcessor<'a, V> for Interpreter {
 
     /// Loads the interpreter's processor.
     ///
-    /// Also maps templates function indices to runtime functions.
+    /// Also maps templates call indices to runtime calls.
     fn build_processor(
         &'a mut self,
         template: Template<V>,
-        functions: &'a HashMap<&'a str, &'a (CallFunction<V> + 'a)>
-    ) -> Result<Process<V>, FunctionMapError> {
+        calls: &'a HashMap<&'a str, &'a (Function<V> + 'a)>
+    ) -> Result<Process<V>, CallMapError> {
         Ok(Process::<V> {
             instructions: template.instructions,
             constants: template.constants,
-            functions:  match template.functions_template.build(functions) {
+            calls:  match template.calls_template.build(calls) {
                 Ok(built) => built,
-                Err(options::Error::ParameterMissing(s)) => return Err(FunctionMapError::NotFound(s)),
+                Err(options::Error::ParameterMissing(s)) => return Err(CallMapError::NotFound(s)),
             },
         })
     }
@@ -530,7 +530,7 @@ mod test {
     fn run_function() {
         struct AddOp;
 
-        impl CallFunction<Value> for AddOp {
+        impl Function<Value> for AddOp {
             fn invoke<'r>(&self, args: &'r [Value]) -> Option<Value> {
                 Some(match (&args[0], &args[1]) {
                     (&Value::Int(a), &Value::Int(b)) => Value::Int(a + b),
@@ -542,18 +542,18 @@ mod test {
         let add = AddOp;
 
         let mut funs = HashMap::new();
-        funs.insert("add", &add as &CallFunction<Value>);
+        funs.insert("add", &add as &Function<Value>);
 
         let mut i = Interpreter::new();
         let p = i.build_processor(
             Template::<Value>::empty()
-                .push_function("add", Function(1))
+                .push_call("add", Call(1))
                 .push_constant(Constant(1), Value::Int(2))
                 .push_constant(Constant(2), Value::Int(3))
                 .push_instructions(vec![
                     Instruction::Push(Mem::Const(Constant(1))),
                     Instruction::Push(Mem::Const(Constant(2))),
-                    Instruction::Call(Function(1), 2, true),
+                    Instruction::Call(Call(1), 2, true),
                     Instruction::Output(Mem::StackTop1),
                 ]),
             &funs

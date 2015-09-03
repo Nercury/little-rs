@@ -12,7 +12,7 @@ fn main() {
             .push_instructions(vec![
                 Instruction::Output(Mem::Const(Constant(0))),
                 Instruction::Push(Mem::Param(Parameter(1))),
-                Instruction::Call(Function(1), 1, true),
+                Instruction::Call(Call(1), 1, true),
                 Instruction::Output(Mem::StackTop1),
                 Instruction::Pop(1),
             ]),
