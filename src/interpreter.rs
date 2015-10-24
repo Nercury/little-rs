@@ -257,7 +257,7 @@ impl<'a, V: BufferTo + Clone> io::Read for InterpreterStream<'a, V> {
     }
 }
 
-pub struct Process<'a, V> {
+pub struct Process<'a, V: 'a> {
     instructions: Vec<Instruction>,
     constants: Options<Constant, V>,
     calls: Options<Call, &'a Function<V>>,
