@@ -147,6 +147,19 @@ enum ExecutionResult {
 }
 
 impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
+    /// Returns specified number of stack items.
+    ///
+    /// If stack is smaller, returns None.
+    pub fn peek_stack<'r>(&'r self, slice_size: usize) -> Option<&'r [V]> {
+        let stack_len = self.values.stack.len();
+
+        if stack_len < slice_size {
+            return None;
+        }
+
+        Some(&self.values.stack[stack_len - slice_size as usize .. stack_len])
+    }
+
     fn execute(&mut self) -> Result<ExecutionResult, Error>  {
         match self.values.process.instructions.get(self.pc) {
             Some(i) => {
