@@ -84,6 +84,8 @@ pub enum Instruction {
     Call(Call, u8, bool),
     /// Copy value from `Mem` to `Binding`.
     Load(Binding, Mem),
+    /// Interupt execution, it is up to the user to know what to do with the stack at current state.
+    Interupt,
 }
 
 /// Simple value implementation.

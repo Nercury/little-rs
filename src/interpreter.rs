@@ -113,6 +113,7 @@ pub enum Error {
     ConstantMissing(Constant),
     CallMissing(Call),
     StackUnderflow,
+    Interupt,
 }
 
 impl fmt::Display for Error {
@@ -122,6 +123,7 @@ impl fmt::Display for Error {
             Error::ConstantMissing(c) => write!(f, "Constant {:?} is missing.", c),
             Error::CallMissing(c) => write!(f, "Call {:?} is missing.", c),
             Error::StackUnderflow => write!(f, "Attempt to pop empty stack."),
+            Error::Interupt => write!(f, "Interupt."),
         }
     }
 }
@@ -133,12 +135,19 @@ impl error::Error for Error {
             Error::ConstantMissing(_) => "constant is missing",
             Error::CallMissing(_) => "call is missing",
             Error::StackUnderflow => "stack underflow",
+            Error::Interupt => "interupt",
         }
     }
 }
 
+enum ExecutionResult {
+    Done,
+    Continue,
+    Interupt,
+}
+
 impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
-    fn execute(&mut self) -> Result<bool, Error>  {
+    fn execute(&mut self) -> Result<ExecutionResult, Error>  {
         match self.values.process.instructions.get(self.pc) {
             Some(i) => {
                 match *i {
@@ -162,7 +171,7 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                     },
                     Instruction::Jump(loc) => {
                         self.pc = loc as usize;
-                        return Ok(true);
+                        return Ok(ExecutionResult::Continue);
                     },
                     Instruction::CondJump(loc, ref m, cond) => {
                         let value = try!(self.values.get_mem_value(m));
@@ -181,7 +190,7 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                         };
                         if should_jump {
                             self.pc = loc as usize;
-                            return Ok(true);
+                            return Ok(ExecutionResult::Continue);
                         }
                     },
                     Instruction::Call(call, argc, returns) => {
@@ -197,11 +206,15 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
                             self.values.stack.push(result.unwrap());
                         }
                     },
+                    Instruction::Interupt => {
+                        self.pc += 1;
+                        return Ok(ExecutionResult::Interupt);
+                    }
                 };
                 self.pc += 1;
-                Ok(true)
+                Ok(ExecutionResult::Continue)
             },
-            None => Ok(false),
+            None => Ok(ExecutionResult::Done),
         }
     }
 
@@ -246,8 +259,10 @@ impl<'a, V: BufferTo + Clone> io::Read for InterpreterStream<'a, V> {
             }
 
             match self.execute() {
-                Ok(cont) => if !cont {
-                    return self.consume_buf(buf);
+                Ok(res) => match res {
+                    ExecutionResult::Done => return self.consume_buf(buf),
+                    ExecutionResult::Continue => (),
+                    ExecutionResult::Interupt => return Err(io::Error::new(io::ErrorKind::Other, Error::Interupt)),
                 },
                 Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
             }
@@ -312,7 +327,9 @@ impl<'a, V: BufferTo + Clone + 'a> BuildProcessor<'a, V> for Interpreter {
 mod test {
     use std::collections::HashMap;
     use std::io::Read;
+    use std::io;
     use std::error::Error;
+    use super::Error as InterpreterError;
     use super::super::*;
 
     #[test]
@@ -335,6 +352,44 @@ mod test {
             .expect("expected to receive error from read");
 
         assert_eq!("parameter is missing", res.description());
+    }
+
+    #[test]
+    fn can_handle_interupt() {
+        let funs = HashMap::new();
+        let mut i = Interpreter::new();
+        let p = i.build_processor(
+            Template::empty()
+                .push_constant(Constant(1), Value::Str("Abr".into()))
+                .push_instructions(vec![
+                    Instruction::Output(Mem::Const(Constant(1))),
+                    Instruction::Interupt,
+                    Instruction::Output(Mem::Const(Constant(1))),
+                ]),
+            &funs
+        ).unwrap();
+
+        let mut res = String::new();
+        let mut received_interupt = false;
+
+        let mut interpreter = p.run(Options::<Parameter, Value>::empty());
+        loop {
+            match interpreter.read_to_string(&mut res) {
+                Err(e) => {
+                    match e.get_ref() {
+                        Some(r) => match r.downcast_ref() {
+                            Some(&InterpreterError::Interupt) => received_interupt = true,
+                            _ => panic!("other error"),
+                        },
+                        None => panic!("io error"),
+                    };
+                },
+                Ok(_) => break,
+            }
+        }
+
+        assert!(received_interupt);
+        assert_eq!("AbrAbr", &res);
     }
 
     #[test]
