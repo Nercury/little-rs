@@ -17,6 +17,8 @@ matrix:
       env: FEATURES=''
     - rust: stable
       env: FEATURES=''
+    - rust: 1.2.0
+      env: FEATURES=''
     - rust: 1.1.0
       env: FEATURES=''
     - rust: 1.0.0

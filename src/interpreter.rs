@@ -327,9 +327,7 @@ impl<'a, V: BufferTo + Clone + 'a> BuildProcessor<'a, V> for Interpreter {
 mod test {
     use std::collections::HashMap;
     use std::io::Read;
-    use std::io;
     use std::error::Error;
-    use super::Error as InterpreterError;
     use super::super::*;
 
     #[test]
@@ -376,12 +374,9 @@ mod test {
         loop {
             match interpreter.read_to_string(&mut res) {
                 Err(e) => {
-                    match e.get_ref() {
-                        Some(r) => match r.downcast_ref() {
-                            Some(&InterpreterError::Interupt) => received_interupt = true,
-                            _ => panic!("other error"),
-                        },
-                        None => panic!("io error"),
+                    match e.description() {
+                        "interupt" => received_interupt = true,
+                        e => panic!("other error {:?}", e),
                     };
                 },
                 Ok(_) => break,
