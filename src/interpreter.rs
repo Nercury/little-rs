@@ -19,7 +19,7 @@ use {
     Cond,
     Mem,
     Run,
-    BufferTo,
+    LittleValue,
     Template,
     BuildProcessor,
     Function,
@@ -42,7 +42,7 @@ struct Values<'a, V: 'a> {
     process: &'a Process<'a, V>,
 }
 
-impl<'a, V: Clone + BufferTo> Values<'a, V> {
+impl<'a, V: LittleValue> Values<'a, V> {
     fn get_mem_value(&self, mem: &Mem) -> Result<Cow<V>, Error> {
         Ok(match *mem {
             Mem::Binding(i) => self.get(i),
@@ -155,7 +155,7 @@ enum ExecutionResult {
     Interupt,
 }
 
-impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
+impl<'a, V: LittleValue> InterpreterStream<'a, V> {
     /// Returns specified number of stack items.
     ///
     /// If stack is smaller, returns None.
@@ -272,7 +272,7 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
     }
 }
 
-impl<'a, V: BufferTo + Clone> io::Read for InterpreterStream<'a, V> {
+impl<'a, V: LittleValue> io::Read for InterpreterStream<'a, V> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         loop {
             if self.buf.len() >= buf.len() {
@@ -299,7 +299,7 @@ pub struct Process<'a, V: 'a> {
     calls: Options<Call, &'a Function<V>>,
 }
 
-impl<'a, V: BufferTo + Clone + 'a> Run<'a, V> for Process<'a, V> {
+impl<'a, V: LittleValue + 'a> Run<'a, V> for Process<'a, V> {
     type Stream = InterpreterStream<'a, V>;
 
     fn run(&'a self, parameters: Options<Parameter, V>) -> InterpreterStream<'a, V> {
@@ -322,7 +322,7 @@ impl Interpreter {
     }
 }
 
-impl<'a, V: BufferTo + Clone + 'a> BuildProcessor<'a, V> for Interpreter {
+impl<'a, V: LittleValue + 'a> BuildProcessor<'a, V> for Interpreter {
     type Output = Process<'a, V>;
 
     /// Loads the interpreter's processor.
@@ -361,7 +361,9 @@ mod test {
         Str(String)
     }
 
-    impl BufferTo for Value {
+    impl LittleValue for Value { }
+
+    impl Default for Value {
         fn default() -> Value {
             Value::Null
         }

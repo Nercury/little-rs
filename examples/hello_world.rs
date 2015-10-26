@@ -15,13 +15,16 @@ pub enum Value {
 }
 
 /// One requirement: this trait needs to be implemented for it.
-impl BufferTo for Value {
+impl LittleValue for Value {}
+
+/// Which also requires Default trait.
+impl Default for Value {
     fn default() -> Value {
         Value::Null
     }
 }
 
-/// Which also requires Display trait.
+/// And Display trait.
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {

@@ -130,10 +130,8 @@ pub trait Run<'a, V> {
     fn run(&'a self, parameters: Options<Parameter, V>) -> Self::Stream;
 }
 
-/// Writes self to growable Vec<u8> buffer.
-pub trait BufferTo : Eq + PartialOrd + fmt::Display {
-    fn default() -> Self;
-}
+/// User value has to implement this trait.
+pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display { }
 
 /// Executes template without compilation.
 pub struct Interpreter;
