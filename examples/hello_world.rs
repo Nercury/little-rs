@@ -2,6 +2,7 @@ extern crate little;
 
 use std::collections::HashMap;
 use std::io::{ Read, Write };
+use std::fmt;
 use little::*;
 
 /// Simple value implementation.
@@ -18,32 +19,25 @@ impl BufferTo for Value {
     fn default() -> Value {
         Value::Null
     }
+}
 
-    fn buffer_to(&self, buf: &mut Vec<u8>) {
+/// Which also requires Display trait.
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Value::Null => (),
-            Value::Str(ref s) => write!(buf, "{}", s).unwrap(),
+            Value::Null => Ok(()),
+            Value::Str(ref s) => write!(f, "{}", s),
         }
     }
 }
 
 /// Concatenates "Hello" and "World" and prints "Hello World"
 fn main() {
-    // Function that joins two string values.
+    // Function that converts two values to strings and joins them.
     // This function expects to receive 2 arguments.
     // When generating instructions you should take care of that.
     let join = |args: &[Value]| {
-        // will be writing to buffer because our value may be something else than string (in theory).
-        let mut result = Vec::new();
-
-        // write first value
-        args[0].buffer_to(&mut result);
-        // write space
-        write!(result, " ").unwrap();
-        // write second value
-        args[1].buffer_to(&mut result);
-
-        Some(Value::Str(String::from_utf8_lossy(&result).into_owned()))
+        Some(Value::Str(format!("{} {}", args[0], args[1])))
     };
 
     // Functions that can be called from template.

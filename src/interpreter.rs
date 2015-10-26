@@ -1,7 +1,7 @@
 //! Template interpreter.
 
 use std::io;
-use std::io::{ Read };
+use std::io::{ Read, Write };
 use std::collections::HashMap;
 use std::error;
 use std::fmt;
@@ -107,13 +107,20 @@ impl<'a, V: Clone + BufferTo> Values<'a, V> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub enum Error {
     ParameterMissing(Parameter),
     ConstantMissing(Constant),
     CallMissing(Call),
+    OutputError(io::Error),
     StackUnderflow,
     Interupt,
+}
+
+impl From<io::Error> for Error {
+    fn from(other: io::Error) -> Error {
+        Error::OutputError(other)
+    }
 }
 
 impl fmt::Display for Error {
@@ -122,6 +129,7 @@ impl fmt::Display for Error {
             Error::ParameterMissing(p) => write!(f, "Parameter {:?} is missing.", p),
             Error::ConstantMissing(c) => write!(f, "Constant {:?} is missing.", c),
             Error::CallMissing(c) => write!(f, "Call {:?} is missing.", c),
+            Error::OutputError(ref e) => write!(f, "Output error: {:?}", e),
             Error::StackUnderflow => write!(f, "Attempt to pop empty stack."),
             Error::Interupt => write!(f, "Interupt."),
         }
@@ -134,6 +142,7 @@ impl error::Error for Error {
             Error::ParameterMissing(_) => "parameter is missing",
             Error::ConstantMissing(_) => "constant is missing",
             Error::CallMissing(_) => "call is missing",
+            Error::OutputError(_) => "output error",
             Error::StackUnderflow => "stack underflow",
             Error::Interupt => "interupt",
         }
@@ -165,8 +174,7 @@ impl<'a, V: BufferTo + Clone> InterpreterStream<'a, V> {
             Some(i) => {
                 match *i {
                     Instruction::Output(ref m) => {
-                        try!(self.values.get_mem_value(m))
-                            .buffer_to(&mut self.buf);
+                        try!(write!(self.buf, "{}", try!(self.values.get_mem_value(m))))
                     },
                     Instruction::Pop(mut c) => while c > 0 {
                         if let None = self.values.stack.pop() {
@@ -339,6 +347,7 @@ impl<'a, V: BufferTo + Clone + 'a> BuildProcessor<'a, V> for Interpreter {
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
+    use std::fmt;
     use std::io::Read;
     use std::io::Write;
     use std::error::Error;
@@ -356,12 +365,14 @@ mod test {
         fn default() -> Value {
             Value::Null
         }
+    }
 
-        fn buffer_to(&self, buf: &mut Vec<u8>) {
+    impl fmt::Display for Value {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match *self {
-                Value::Null => (),
-                Value::Int(ref i) => write!(buf, "{}", i).unwrap(),
-                Value::Str(ref s) => write!(buf, "{}", s).unwrap(),
+                Value::Null => Ok(()),
+                Value::Int(ref i) => write!(f, "{}", i),
+                Value::Str(ref s) => write!(f, "{}", s),
             }
         }
     }

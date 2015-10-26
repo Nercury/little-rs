@@ -9,6 +9,7 @@
 
 use std::collections::HashMap;
 use std::io;
+use std::fmt;
 
 mod options;
 pub mod interpreter;
@@ -130,9 +131,8 @@ pub trait Run<'a, V> {
 }
 
 /// Writes self to growable Vec<u8> buffer.
-pub trait BufferTo : Eq + PartialOrd {
+pub trait BufferTo : Eq + PartialOrd + fmt::Display {
     fn default() -> Self;
-    fn buffer_to(&self, buf: &mut Vec<u8>);
 }
 
 /// Executes template without compilation.
