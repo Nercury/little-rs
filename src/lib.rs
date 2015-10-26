@@ -9,7 +9,6 @@
 
 use std::collections::HashMap;
 use std::io;
-use std::io::Write;
 
 mod options;
 pub mod interpreter;
@@ -86,28 +85,6 @@ pub enum Instruction {
     Load(Binding, Mem),
     /// Interupt execution, it is up to the user to know what to do with the stack at current state.
     Interupt,
-}
-
-/// Simple value implementation.
-#[derive(Clone, Eq, PartialEq, PartialOrd)]
-pub enum Value {
-    Null,
-    Int(i64),
-    Str(String)
-}
-
-impl BufferTo for Value {
-    fn default() -> Value {
-        Value::Null
-    }
-
-    fn buffer_to(&self, buf: &mut Vec<u8>) {
-        match *self {
-            Value::Null => (),
-            Value::Int(ref i) => write!(buf, "{}", i).unwrap(),
-            Value::Str(ref s) => write!(buf, "{}", s).unwrap(),
-        }
-    }
 }
 
 /// External template function.

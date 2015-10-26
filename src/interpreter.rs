@@ -340,8 +340,31 @@ impl<'a, V: BufferTo + Clone + 'a> BuildProcessor<'a, V> for Interpreter {
 mod test {
     use std::collections::HashMap;
     use std::io::Read;
+    use std::io::Write;
     use std::error::Error;
     use super::super::*;
+
+    /// Simple value implementation.
+    #[derive(Clone, Eq, PartialEq, PartialOrd)]
+    pub enum Value {
+        Null,
+        Int(i64),
+        Str(String)
+    }
+
+    impl BufferTo for Value {
+        fn default() -> Value {
+            Value::Null
+        }
+
+        fn buffer_to(&self, buf: &mut Vec<u8>) {
+            match *self {
+                Value::Null => (),
+                Value::Int(ref i) => write!(buf, "{}", i).unwrap(),
+                Value::Str(ref s) => write!(buf, "{}", s).unwrap(),
+            }
+        }
+    }
 
     #[test]
     fn error_if_missing_param() {
