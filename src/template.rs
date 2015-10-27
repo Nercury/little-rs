@@ -58,6 +58,10 @@ impl<V> Template<V> {
         self
     }
 
+    pub fn push_instruction(&mut self, instruction: Instruction) {
+        self.instructions.push(instruction);
+    }
+
     pub fn push_instructions<I: IntoIterator<Item=Instruction>>(mut self, instructions: I) -> Self {
         self.instructions.extend(instructions.into_iter());
         self
