@@ -602,7 +602,7 @@ mod test {
 
     #[test]
     fn run_function() {
-        let add = |args: &[Value]| {
+        let add = |args: &[Value]| -> InterpreterResult<Value> {
             Ok(match (&args[0], &args[1]) {
                 (&Value::Int(a), &Value::Int(b)) => Value::Int(a + b),
                 _ => unimplemented!(),
