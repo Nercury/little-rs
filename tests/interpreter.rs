@@ -230,7 +230,7 @@ fn output_const() {
 
 #[test]
 fn run_function() {
-    let add = |args: &[Value]| -> InterpreterResult<Value> {
+    let add = |args: &[Value]| -> LittleResult<Value> {
         Ok(match (&args[0], &args[1]) {
             (&Value::Int(a), &Value::Int(b)) => Value::Int(a + b),
             _ => unimplemented!(),

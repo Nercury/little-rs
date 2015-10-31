@@ -3,8 +3,6 @@
 use std::io;
 use std::io::{ Read, Write };
 use std::collections::HashMap;
-use std::error;
-use std::fmt;
 use std::borrow::Cow;
 
 use options;
@@ -25,6 +23,7 @@ use {
     Function,
     Interpreter,
     CallMapError,
+    LittleError,
 };
 
 pub struct InterpreterStream<'a, V: 'a> {
@@ -43,24 +42,24 @@ struct Values<'a, V: 'a> {
 }
 
 impl<'a, V: LittleValue> Values<'a, V> {
-    fn get_mem_value(&self, mem: &Mem) -> Result<Cow<V>, Error> {
+    fn get_mem_value(&self, mem: &Mem) -> Result<Cow<V>, LittleError> {
         Ok(match *mem {
             Mem::Binding(i) => self.get(i),
             Mem::Param(i) => match self.parameters.get(i) {
                 Some(value) => Cow::Borrowed(value),
-                None => return Err(Error::ParameterMissing(i)),
+                None => return Err(LittleError::ParameterMissing(i)),
             },
             Mem::Const(i) => match self.process.constants.get(i) {
                 Some(value) => Cow::Borrowed(value),
-                None => return Err(Error::ConstantMissing(i)),
+                None => return Err(LittleError::ConstantMissing(i)),
             },
             Mem::StackTop1 => match self.stack.last() {
                 Some(value) => Cow::Borrowed(value),
-                None => return Err(Error::StackUnderflow),
+                None => return Err(LittleError::StackUnderflow),
             },
             Mem::StackTop2 => match self.stack.get(self.stack.len() - 2) {
                 Some(value) => Cow::Borrowed(value),
-                None => return Err(Error::StackUnderflow),
+                None => return Err(LittleError::StackUnderflow),
             },
         })
     }
@@ -107,51 +106,6 @@ impl<'a, V: LittleValue> Values<'a, V> {
     }
 }
 
-#[derive(Debug)]
-pub enum Error {
-    ParameterMissing(Parameter),
-    ConstantMissing(Constant),
-    CallMissing(Call),
-    CallError(Box<error::Error + Sync + Send>),
-    OutputError(io::Error),
-    StackUnderflow,
-    Interupt,
-}
-
-impl From<io::Error> for Error {
-    fn from(other: io::Error) -> Error {
-        Error::OutputError(other)
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::ParameterMissing(p) => write!(f, "Parameter {:?} is missing.", p),
-            Error::ConstantMissing(c) => write!(f, "Constant {:?} is missing.", c),
-            Error::CallMissing(c) => write!(f, "Call {:?} is missing.", c),
-            Error::CallError(ref e) => e.fmt(f),
-            Error::OutputError(ref e) => write!(f, "Output error: {:?}", e),
-            Error::StackUnderflow => write!(f, "Attempt to pop empty stack."),
-            Error::Interupt => write!(f, "Interupt."),
-        }
-    }
-}
-
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::ParameterMissing(_) => "parameter is missing",
-            Error::ConstantMissing(_) => "constant is missing",
-            Error::CallMissing(_) => "call is missing",
-            Error::CallError(ref e) => e.description(),
-            Error::OutputError(_) => "output error",
-            Error::StackUnderflow => "stack underflow",
-            Error::Interupt => "interupt",
-        }
-    }
-}
-
 enum ExecutionResult {
     Done,
     Continue,
@@ -172,7 +126,7 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
         Some(&self.values.stack[stack_len - slice_size as usize .. stack_len])
     }
 
-    fn execute(&mut self) -> Result<ExecutionResult, Error>  {
+    fn execute(&mut self) -> Result<ExecutionResult, LittleError>  {
         match self.values.process.instructions.get(self.pc) {
             Some(i) => {
                 match *i {
@@ -181,7 +135,7 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
                     },
                     Instruction::Pop(mut c) => while c > 0 {
                         if let None = self.values.stack.pop() {
-                            return Err(Error::StackUnderflow);
+                            return Err(LittleError::StackUnderflow);
                         }
                         c -= 1;
                     },
@@ -202,7 +156,7 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
                         let value_ref = value.as_ref();
                         let stack = match self.values.stack.last() {
                             Some(value) => value,
-                            None => return Err(Error::StackUnderflow),
+                            None => return Err(LittleError::StackUnderflow),
                         };
                         let should_jump = match cond {
                             Cond::Eq => stack == value_ref,
@@ -220,7 +174,7 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
                     Instruction::Call(call, argc, returns) => {
                         let fun = match self.values.process.calls.get(call) {
                             Some(f) => f,
-                            None => return Err(Error::CallMissing(call)),
+                            None => return Err(LittleError::CallMissing(call)),
                         };
 
                         let stack_len = self.values.stack.len();
@@ -286,7 +240,7 @@ impl<'a, V: LittleValue> io::Read for InterpreterStream<'a, V> {
                 Ok(res) => match res {
                     ExecutionResult::Done => return self.consume_buf(buf),
                     ExecutionResult::Continue => (),
-                    ExecutionResult::Interupt => return Err(io::Error::new(io::ErrorKind::Other, Error::Interupt)),
+                    ExecutionResult::Interupt => return Err(io::Error::new(io::ErrorKind::Other, LittleError::Interupt)),
                 },
                 Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
             }

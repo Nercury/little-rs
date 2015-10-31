@@ -10,14 +10,16 @@
 use std::collections::HashMap;
 use std::io;
 use std::fmt;
-use std::error;
 
 mod options;
 pub mod interpreter;
 mod template;
+mod error;
 
 pub use options::{ OptionsTemplate, Options };
 pub use template::{ Template };
+pub use error::seek::SeekError;
+pub use error::runtime::{ LittleError, LittleResult };
 
 /// Immutable runtime parameter for machine.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
@@ -93,16 +95,14 @@ pub enum Instruction {
 ///
 /// This function is called from inside processor, and is used to implement various helpers.
 pub trait Function<V> {
-    fn invoke<'r>(&self, &'r [V]) -> InterpreterResult<V>;
+    fn invoke<'r>(&self, &'r [V]) -> LittleResult<V>;
 }
 
-impl<V, F: for<'z> Fn(&'z [V]) -> InterpreterResult<V>> Function<V> for F {
-    fn invoke<'r>(&self, args: &'r [V]) -> InterpreterResult<V> {
+impl<V, F: for<'z> Fn(&'z [V]) -> LittleResult<V>> Function<V> for F {
+    fn invoke<'r>(&self, args: &'r [V]) -> LittleResult<V> {
         self(args)
     }
 }
-
-pub type InterpreterResult<V> = Result<V, Box<error::Error>>;
 
 /// Call mapping error.
 #[derive(Debug)]
@@ -138,3 +138,13 @@ pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display { }
 
 /// Executes template without compilation.
 pub struct Interpreter;
+
+pub trait PositionSeek {
+    /// Seek to an offset, in position, in some container/stream.
+    ///
+    /// A seek beyond the end of a container is allowed, but implementation defined.
+    ///
+    /// If the seek operation completed successfully, this method returns the new
+    /// position from the start of the container.
+    fn seek(&mut self, pos: usize) -> Result<usize, SeekError>;
+}
