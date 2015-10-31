@@ -139,6 +139,7 @@ pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display { }
 /// Executes template without compilation.
 pub struct Interpreter;
 
+/// Seek to an offset.
 pub trait PositionSeek {
     /// Seek to an offset, in position, in some container/stream.
     ///

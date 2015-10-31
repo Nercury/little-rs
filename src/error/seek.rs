@@ -2,9 +2,12 @@ use std::io;
 use std::error;
 use std::fmt;
 
+/// Error while performing seek.
 #[derive(Debug)]
 pub enum SeekError {
+    /// Out of bound operation on container.
     OutOfBounds(u32),
+    /// I/O error in underlying stream.
     Io(io::Error),
 }
 
