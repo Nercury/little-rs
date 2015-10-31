@@ -10,6 +10,7 @@
 use std::collections::HashMap;
 use std::io;
 use std::fmt;
+use std::error;
 
 mod options;
 pub mod interpreter;
@@ -91,12 +92,12 @@ pub enum Instruction {
 /// External template function.
 ///
 /// This function is called from inside processor, and is used to implement various helpers.
-pub trait Function<V> {
-    fn invoke<'r>(&self, &'r [V]) -> Option<V>;
+pub trait Function<V, E: error::Error> {
+    fn invoke<'r>(&self, &'r [V]) -> Result<V, E>;
 }
 
-impl<V, F: for<'z> Fn(&'z [V]) -> Option<V>> Function<V> for F {
-    fn invoke<'r>(&self, args: &'r [V]) -> Option<V> {
+impl<V, E: error::Error, F: for<'z> Fn(&'z [V]) -> Result<V, E>> Function<V, E> for F {
+    fn invoke<'r>(&self, args: &'r [V]) -> Result<V, E> {
         self(args)
     }
 }
@@ -113,13 +114,13 @@ pub enum CallMapError {
 /// so it is possible to call `run` on it.
 ///
 /// Also requires `calls` list that could be mapped to calls required by processor.
-pub trait BuildProcessor<'a, V> {
+pub trait BuildProcessor<'a, V, E> {
     type Output: Run<'a, V>;
 
     fn build_processor(
         &'a mut self,
         template: Template<V>,
-        calls: &'a HashMap<&'a str, &'a (Function<V> + 'a)>
+        calls: &'a HashMap<&'a str, &'a (Function<V, E> + 'a)>
     ) -> Result<Self::Output, CallMapError>;
 }
 

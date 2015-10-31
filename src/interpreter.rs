@@ -27,22 +27,22 @@ use {
     CallMapError,
 };
 
-pub struct InterpreterStream<'a, V: 'a> {
+pub struct InterpreterStream<'a, V: 'a, E:'a> {
     pc: usize,
     buf: Vec<u8>,
-    values: Values<'a, V>,
+    values: Values<'a, V, E>,
 }
 
 const MAX_VALUES: usize = 500000;
 
-struct Values<'a, V: 'a> {
+struct Values<'a, V: 'a, E: 'a> {
     stack: Vec<V>,
     values: Vec<V>,
     parameters: Options<Parameter, V>,
-    process: &'a Process<'a, V>,
+    process: &'a Process<'a, V, E>,
 }
 
-impl<'a, V: LittleValue> Values<'a, V> {
+impl<'a, V: LittleValue, E> Values<'a, V, E> {
     fn get_mem_value(&self, mem: &Mem) -> Result<Cow<V>, Error> {
         Ok(match *mem {
             Mem::Binding(i) => self.get(i),
@@ -155,7 +155,7 @@ enum ExecutionResult {
     Interupt,
 }
 
-impl<'a, V: LittleValue> InterpreterStream<'a, V> {
+impl<'a, V: LittleValue, E: error::Error> InterpreterStream<'a, V, E> {
     /// Returns specified number of stack items.
     ///
     /// If stack is smaller, returns None.
@@ -272,7 +272,7 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
     }
 }
 
-impl<'a, V: LittleValue> io::Read for InterpreterStream<'a, V> {
+impl<'a, V: LittleValue, E: error::Error> io::Read for InterpreterStream<'a, V, E> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         loop {
             if self.buf.len() >= buf.len() {
@@ -293,16 +293,16 @@ impl<'a, V: LittleValue> io::Read for InterpreterStream<'a, V> {
     }
 }
 
-pub struct Process<'a, V: 'a> {
+pub struct Process<'a, V: 'a, E: 'a> {
     instructions: Vec<Instruction>,
     constants: Options<Constant, V>,
-    calls: Options<Call, &'a Function<V>>,
+    calls: Options<Call, &'a Function<V, E>>,
 }
 
-impl<'a, V: LittleValue + 'a> Run<'a, V> for Process<'a, V> {
-    type Stream = InterpreterStream<'a, V>;
+impl<'a, V: LittleValue + 'a, E: error::Error> Run<'a, V> for Process<'a, V, E> {
+    type Stream = InterpreterStream<'a, V, E>;
 
-    fn run(&'a self, parameters: Options<Parameter, V>) -> InterpreterStream<'a, V> {
+    fn run(&'a self, parameters: Options<Parameter, V>) -> InterpreterStream<'a, V, E> {
         InterpreterStream {
             pc: 0,
             buf: Vec::new(),
@@ -322,8 +322,8 @@ impl Interpreter {
     }
 }
 
-impl<'a, V: LittleValue + 'a> BuildProcessor<'a, V> for Interpreter {
-    type Output = Process<'a, V>;
+impl<'a, V: LittleValue + 'a, E: error::Error + 'a> BuildProcessor<'a, V, E> for Interpreter {
+    type Output = Process<'a, V, E>;
 
     /// Loads the interpreter's processor.
     ///
@@ -331,9 +331,9 @@ impl<'a, V: LittleValue + 'a> BuildProcessor<'a, V> for Interpreter {
     fn build_processor(
         &'a mut self,
         template: Template<V>,
-        calls: &'a HashMap<&'a str, &'a (Function<V> + 'a)>
-    ) -> Result<Process<V>, CallMapError> {
-        Ok(Process::<V> {
+        calls: &'a HashMap<&'a str, &'a (Function<V, E> + 'a)>
+    ) -> Result<Process<V, E>, CallMapError> {
+        Ok(Process::<V, E> {
             instructions: template.instructions,
             constants: template.constants,
             calls:  match template.calls_template.build(calls) {
@@ -352,6 +352,7 @@ mod test {
     use std::io::Write;
     use std::error::Error;
     use super::super::*;
+    use super::Process;
 
     /// Simple value implementation.
     #[derive(Clone, Eq, PartialEq, PartialOrd)]
@@ -379,11 +380,26 @@ mod test {
         }
     }
 
+    #[derive(Debug)]
+    struct RuntimeError;
+
+    impl Error for RuntimeError {
+        fn description(&self) -> &str {
+            "runtime error"
+        }
+    }
+
+    impl fmt::Display for RuntimeError {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "Runtime error")
+        }
+    }
+
     #[test]
     fn error_if_missing_param() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
-        let p = i.build_processor(
+        let p: Process<Value, RuntimeError> = i.build_processor(
             Template::empty()
                 .push_instructions(vec![
                     Instruction::Output(Mem::Param(Parameter(1)))
@@ -405,7 +421,7 @@ mod test {
     fn can_handle_interupt() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
-        let p = i.build_processor(
+        let p: Process<Value, RuntimeError> = i.build_processor(
             Template::empty()
                 .push_constant(Constant(1), Value::Str("Abr".into()))
                 .push_instructions(vec![
@@ -440,8 +456,8 @@ mod test {
     fn error_if_missing_const() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
-        let p = i.build_processor(
-            Template::<Value>::empty()
+        let p: Process<Value, RuntimeError> = i.build_processor(
+            Template::empty()
                 .push_instructions(vec![
                     Instruction::Output(Mem::Const(Constant(1)))
                 ]),
@@ -450,7 +466,7 @@ mod test {
 
         let mut res = String::new();
 
-        let res = p.run(Options::<Parameter, Value>::empty())
+        let res = p.run(Options::empty())
             .read_to_string(&mut res)
             .err()
             .expect("expected to receive error from read");
@@ -462,8 +478,8 @@ mod test {
     fn error_if_pop_empty_stack() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
-        let p = i.build_processor(
-            Template::<Value>::empty()
+        let p: Process<Value, RuntimeError> = i.build_processor(
+            Template::empty()
                 .push_instructions(vec![
                     Instruction::Pop(1)
                 ]),
@@ -488,34 +504,6 @@ mod test {
 
     #[test]
     fn output_param() {
-        // higher level example
-        //
-        // let env = Staging::new(Interpreter::new())
-        //     .push_function("do_things", || 1)
-        //     .push_loader(|file| {
-        //         Some(match file {
-        //             "example.tmp" => Source::empty()
-        //                 .push_instructions(vec![
-        //                     Command::Output(Scope::Param("text"))
-        //                 ])
-        //                 .into()
-        //                 .unwrap()
-        //             _ => return None,
-        //         })
-        //     })
-        //     .finalize()
-        //     .unwrap();
-        //
-        // let mut res = String::new();
-        //
-        // let p = env.load("example.tmp")
-        //     .unwrap()
-        //     .run(vec![
-        //         ("text", "Hello".into())
-        //     ])
-        //     .unwrap()
-        //     .read_to_string(&mut res);
-
         let res = from_instructions_and_params(
             vec![
                 Instruction::Output(Mem::Param(Parameter(1)))
@@ -628,14 +616,14 @@ mod test {
     #[test]
     fn run_function() {
         let add = |args: &[Value]| {
-            Some(match (&args[0], &args[1]) {
+            Ok(match (&args[0], &args[1]) {
                 (&Value::Int(a), &Value::Int(b)) => Value::Int(a + b),
                 _ => unimplemented!(),
             })
         };
 
         let mut funs = HashMap::new();
-        funs.insert("add", &add as &Function<Value>);
+        funs.insert("add", &add as &Function<Value, RuntimeError>);
 
         let mut i = Interpreter::new();
         let p = i.build_processor(
@@ -805,7 +793,7 @@ mod test {
     ) -> String {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
-        let p = i.build_processor(
+        let p: Process<Value, RuntimeError> = i.build_processor(
             Template::empty()
                 .push_instructions(instructions),
             &funs
@@ -833,7 +821,7 @@ mod test {
 
         let funs = HashMap::new();
         let mut i = Interpreter::new();
-        let p = i.build_processor(
+        let p: Process<Value, RuntimeError> = i.build_processor(
             template,
             &funs
         ).unwrap();
