@@ -3,7 +3,6 @@ extern crate little;
 use std::collections::HashMap;
 use std::io::{ Read, Write };
 use std::fmt;
-use std::error;
 use little::*;
 
 /// Simple value implementation.
@@ -35,22 +34,6 @@ impl fmt::Display for Value {
     }
 }
 
-/// Provide error that your functions must return if they fail.
-#[derive(Debug)]
-struct RuntimeError;
-
-impl error::Error for RuntimeError {
-    fn description(&self) -> &str {
-        "runtime error"
-    }
-}
-
-impl fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Runtime error")
-    }
-}
-
 /// Concatenates "Hello" and "World" and prints "Hello World"
 fn main() {
     // Function that converts two values to strings and joins them.
@@ -61,7 +44,7 @@ fn main() {
     };
 
     // Functions that can be called from template.
-    let mut funs = HashMap::<&'static str, &Function<Value, RuntimeError>>::new();
+    let mut funs = HashMap::<&'static str, &Function<Value>>::new();
     funs.insert("join", &join);
 
     // Create new template with instructions and constants.

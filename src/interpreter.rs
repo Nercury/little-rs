@@ -27,22 +27,22 @@ use {
     CallMapError,
 };
 
-pub struct InterpreterStream<'a, V: 'a, E:'a> {
+pub struct InterpreterStream<'a, V: 'a> {
     pc: usize,
     buf: Vec<u8>,
-    values: Values<'a, V, E>,
+    values: Values<'a, V>,
 }
 
 const MAX_VALUES: usize = 500000;
 
-struct Values<'a, V: 'a, E: 'a> {
+struct Values<'a, V: 'a> {
     stack: Vec<V>,
     values: Vec<V>,
     parameters: Options<Parameter, V>,
-    process: &'a Process<'a, V, E>,
+    process: &'a Process<'a, V>,
 }
 
-impl<'a, V: LittleValue, E> Values<'a, V, E> {
+impl<'a, V: LittleValue> Values<'a, V> {
     fn get_mem_value(&self, mem: &Mem) -> Result<Cow<V>, Error> {
         Ok(match *mem {
             Mem::Binding(i) => self.get(i),
@@ -112,6 +112,7 @@ pub enum Error {
     ParameterMissing(Parameter),
     ConstantMissing(Constant),
     CallMissing(Call),
+    CallError(Box<error::Error + Sync + Send>),
     OutputError(io::Error),
     StackUnderflow,
     Interupt,
@@ -129,6 +130,7 @@ impl fmt::Display for Error {
             Error::ParameterMissing(p) => write!(f, "Parameter {:?} is missing.", p),
             Error::ConstantMissing(c) => write!(f, "Constant {:?} is missing.", c),
             Error::CallMissing(c) => write!(f, "Call {:?} is missing.", c),
+            Error::CallError(ref e) => e.fmt(f),
             Error::OutputError(ref e) => write!(f, "Output error: {:?}", e),
             Error::StackUnderflow => write!(f, "Attempt to pop empty stack."),
             Error::Interupt => write!(f, "Interupt."),
@@ -142,6 +144,7 @@ impl error::Error for Error {
             Error::ParameterMissing(_) => "parameter is missing",
             Error::ConstantMissing(_) => "constant is missing",
             Error::CallMissing(_) => "call is missing",
+            Error::CallError(ref e) => e.description(),
             Error::OutputError(_) => "output error",
             Error::StackUnderflow => "stack underflow",
             Error::Interupt => "interupt",
@@ -155,7 +158,7 @@ enum ExecutionResult {
     Interupt,
 }
 
-impl<'a, V: LittleValue, E: error::Error> InterpreterStream<'a, V, E> {
+impl<'a, V: LittleValue> InterpreterStream<'a, V> {
     /// Returns specified number of stack items.
     ///
     /// If stack is smaller, returns None.
@@ -272,7 +275,7 @@ impl<'a, V: LittleValue, E: error::Error> InterpreterStream<'a, V, E> {
     }
 }
 
-impl<'a, V: LittleValue, E: error::Error> io::Read for InterpreterStream<'a, V, E> {
+impl<'a, V: LittleValue> io::Read for InterpreterStream<'a, V> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         loop {
             if self.buf.len() >= buf.len() {
@@ -293,16 +296,16 @@ impl<'a, V: LittleValue, E: error::Error> io::Read for InterpreterStream<'a, V, 
     }
 }
 
-pub struct Process<'a, V: 'a, E: 'a> {
+pub struct Process<'a, V: 'a> {
     instructions: Vec<Instruction>,
     constants: Options<Constant, V>,
-    calls: Options<Call, &'a Function<V, E>>,
+    calls: Options<Call, &'a Function<V>>,
 }
 
-impl<'a, V: LittleValue + 'a, E: error::Error> Run<'a, V> for Process<'a, V, E> {
-    type Stream = InterpreterStream<'a, V, E>;
+impl<'a, V: LittleValue + 'a> Run<'a, V> for Process<'a, V> {
+    type Stream = InterpreterStream<'a, V>;
 
-    fn run(&'a self, parameters: Options<Parameter, V>) -> InterpreterStream<'a, V, E> {
+    fn run(&'a self, parameters: Options<Parameter, V>) -> InterpreterStream<'a, V> {
         InterpreterStream {
             pc: 0,
             buf: Vec::new(),
@@ -322,8 +325,8 @@ impl Interpreter {
     }
 }
 
-impl<'a, V: LittleValue + 'a, E: error::Error + 'a> BuildProcessor<'a, V, E> for Interpreter {
-    type Output = Process<'a, V, E>;
+impl<'a, V: LittleValue + 'a> BuildProcessor<'a, V> for Interpreter {
+    type Output = Process<'a, V>;
 
     /// Loads the interpreter's processor.
     ///
@@ -331,9 +334,9 @@ impl<'a, V: LittleValue + 'a, E: error::Error + 'a> BuildProcessor<'a, V, E> for
     fn build_processor(
         &'a mut self,
         template: Template<V>,
-        calls: &'a HashMap<&'a str, &'a (Function<V, E> + 'a)>
-    ) -> Result<Process<V, E>, CallMapError> {
-        Ok(Process::<V, E> {
+        calls: &'a HashMap<&'a str, &'a (Function<V> + 'a)>
+    ) -> Result<Process<V>, CallMapError> {
+        Ok(Process::<V> {
             instructions: template.instructions,
             constants: template.constants,
             calls:  match template.calls_template.build(calls) {
@@ -352,7 +355,6 @@ mod test {
     use std::io::Write;
     use std::error::Error;
     use super::super::*;
-    use super::Process;
 
     /// Simple value implementation.
     #[derive(Clone, Eq, PartialEq, PartialOrd)]
@@ -380,26 +382,11 @@ mod test {
         }
     }
 
-    #[derive(Debug)]
-    struct RuntimeError;
-
-    impl Error for RuntimeError {
-        fn description(&self) -> &str {
-            "runtime error"
-        }
-    }
-
-    impl fmt::Display for RuntimeError {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "Runtime error")
-        }
-    }
-
     #[test]
     fn error_if_missing_param() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
-        let p: Process<Value, RuntimeError> = i.build_processor(
+        let p = i.build_processor(
             Template::empty()
                 .push_instructions(vec![
                     Instruction::Output(Mem::Param(Parameter(1)))
@@ -421,7 +408,7 @@ mod test {
     fn can_handle_interupt() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
-        let p: Process<Value, RuntimeError> = i.build_processor(
+        let p = i.build_processor(
             Template::empty()
                 .push_constant(Constant(1), Value::Str("Abr".into()))
                 .push_instructions(vec![
@@ -456,8 +443,8 @@ mod test {
     fn error_if_missing_const() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
-        let p: Process<Value, RuntimeError> = i.build_processor(
-            Template::empty()
+        let p = i.build_processor(
+            Template::<Value>::empty()
                 .push_instructions(vec![
                     Instruction::Output(Mem::Const(Constant(1)))
                 ]),
@@ -478,7 +465,7 @@ mod test {
     fn error_if_pop_empty_stack() {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
-        let p: Process<Value, RuntimeError> = i.build_processor(
+        let p = i.build_processor(
             Template::empty()
                 .push_instructions(vec![
                     Instruction::Pop(1)
@@ -623,7 +610,7 @@ mod test {
         };
 
         let mut funs = HashMap::new();
-        funs.insert("add", &add as &Function<Value, RuntimeError>);
+        funs.insert("add", &add as &Function<Value>);
 
         let mut i = Interpreter::new();
         let p = i.build_processor(
@@ -793,7 +780,7 @@ mod test {
     ) -> String {
         let funs = HashMap::new();
         let mut i = Interpreter::new();
-        let p: Process<Value, RuntimeError> = i.build_processor(
+        let p = i.build_processor(
             Template::empty()
                 .push_instructions(instructions),
             &funs
@@ -821,7 +808,7 @@ mod test {
 
         let funs = HashMap::new();
         let mut i = Interpreter::new();
-        let p: Process<Value, RuntimeError> = i.build_processor(
+        let p = i.build_processor(
             template,
             &funs
         ).unwrap();

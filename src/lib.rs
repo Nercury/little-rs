@@ -92,15 +92,17 @@ pub enum Instruction {
 /// External template function.
 ///
 /// This function is called from inside processor, and is used to implement various helpers.
-pub trait Function<V, E: error::Error> {
-    fn invoke<'r>(&self, &'r [V]) -> Result<V, E>;
+pub trait Function<V> {
+    fn invoke<'r>(&self, &'r [V]) -> InterpreterResult<V>;
 }
 
-impl<V, E: error::Error, F: for<'z> Fn(&'z [V]) -> Result<V, E>> Function<V, E> for F {
-    fn invoke<'r>(&self, args: &'r [V]) -> Result<V, E> {
+impl<V, F: for<'z> Fn(&'z [V]) -> InterpreterResult<V>> Function<V> for F {
+    fn invoke<'r>(&self, args: &'r [V]) -> InterpreterResult<V> {
         self(args)
     }
 }
+
+pub type InterpreterResult<V> = Result<V, Box<error::Error>>;
 
 /// Call mapping error.
 #[derive(Debug)]
@@ -114,13 +116,13 @@ pub enum CallMapError {
 /// so it is possible to call `run` on it.
 ///
 /// Also requires `calls` list that could be mapped to calls required by processor.
-pub trait BuildProcessor<'a, V, E> {
+pub trait BuildProcessor<'a, V> {
     type Output: Run<'a, V>;
 
     fn build_processor(
         &'a mut self,
         template: Template<V>,
-        calls: &'a HashMap<&'a str, &'a (Function<V, E> + 'a)>
+        calls: &'a HashMap<&'a str, &'a (Function<V> + 'a)>
     ) -> Result<Self::Output, CallMapError>;
 }
 
