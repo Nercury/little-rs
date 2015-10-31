@@ -3,7 +3,9 @@ extern crate little;
 use std::collections::HashMap;
 use std::io::{ Read, Write };
 use std::fmt;
+
 use little::*;
+use little::interpreter::Interpreter;
 
 /// Simple value implementation.
 /// You can provide your own value implementation for interpreter,

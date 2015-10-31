@@ -21,89 +21,70 @@ use {
     Template,
     BuildProcessor,
     Function,
-    Interpreter,
     CallMapError,
     LittleError,
 };
+
+const MAX_VALUES: usize = 500000;
+
+/// Executes template without compilation.
+pub struct Interpreter;
+
+impl Interpreter {
+    pub fn new() -> Interpreter {
+        Interpreter
+    }
+}
+
+impl<'a, V: LittleValue + 'a> BuildProcessor<'a, V> for Interpreter {
+    type Output = Process<'a, V>;
+
+    /// Loads the interpreter's processor.
+    ///
+    /// Also maps templates call indices to runtime calls.
+    fn build_processor(
+        &'a mut self,
+        template: Template<V>,
+        calls: &'a HashMap<&'a str, &'a (Function<V> + 'a)>
+    ) -> Result<Process<V>, CallMapError> {
+        Ok(Process::<V> {
+            instructions: template.instructions,
+            constants: template.constants,
+            calls:  match template.calls_template.build(calls) {
+                Ok(built) => built,
+                Err(options::Error::ParameterMissing(s)) => return Err(CallMapError::NotFound(s)),
+            },
+        })
+    }
+}
+
+pub struct Process<'a, V: 'a> {
+    instructions: Vec<Instruction>,
+    constants: Options<Constant, V>,
+    calls: Options<Call, &'a Function<V>>,
+}
+
+impl<'a, V: LittleValue + 'a> Run<'a, V> for Process<'a, V> {
+    type Stream = InterpreterStream<'a, V>;
+
+    fn run(&'a self, parameters: Options<Parameter, V>) -> InterpreterStream<'a, V> {
+        InterpreterStream {
+            pc: 0,
+            buf: Vec::new(),
+            values: Values {
+                stack: Vec::new(),
+                values: Vec::new(),
+                process: self,
+                parameters: parameters,
+            }
+        }
+    }
+}
 
 pub struct InterpreterStream<'a, V: 'a> {
     pc: usize,
     buf: Vec<u8>,
     values: Values<'a, V>,
-}
-
-const MAX_VALUES: usize = 500000;
-
-struct Values<'a, V: 'a> {
-    stack: Vec<V>,
-    values: Vec<V>,
-    parameters: Options<Parameter, V>,
-    process: &'a Process<'a, V>,
-}
-
-impl<'a, V: LittleValue> Values<'a, V> {
-    fn get_mem_value(&self, mem: &Mem) -> Result<Cow<V>, LittleError> {
-        Ok(match *mem {
-            Mem::Binding(i) => self.get(i),
-            Mem::Param(i) => match self.parameters.get(i) {
-                Some(value) => Cow::Borrowed(value),
-                None => return Err(LittleError::ParameterMissing(i)),
-            },
-            Mem::Const(i) => match self.process.constants.get(i) {
-                Some(value) => Cow::Borrowed(value),
-                None => return Err(LittleError::ConstantMissing(i)),
-            },
-            Mem::StackTop1 => match self.stack.last() {
-                Some(value) => Cow::Borrowed(value),
-                None => return Err(LittleError::StackUnderflow),
-            },
-            Mem::StackTop2 => match self.stack.get(self.stack.len() - 2) {
-                Some(value) => Cow::Borrowed(value),
-                None => return Err(LittleError::StackUnderflow),
-            },
-        })
-    }
-
-    fn set(&mut self, Binding(index): Binding, value: V) {
-        let i = index as usize;
-        self.ensure_capacity_for_index(i);
-        * unsafe { self.values.get_unchecked_mut(i) } = value;
-    }
-
-    fn get<'r>(&'r self, Binding(index): Binding) -> Cow<'r, V> {
-        let i = index as usize;
-        if i >= self.values.len() {
-            Cow::Owned(V::default())
-        } else {
-            Cow::Borrowed(self.values.get(i).unwrap())
-        }
-    }
-
-    #[cfg(feature="nightly")]
-    fn ensure_capacity_for_index(&mut self, index: usize) {
-        let required_len = index + 1;
-        if required_len > MAX_VALUES {
-            panic!("maximum number of values {} reached!", MAX_VALUES);
-        }
-        if required_len > self.values.len() {
-            self.values.resize(required_len, V::default());
-        }
-    }
-
-    #[cfg(not(feature="nightly"))]
-    fn ensure_capacity_for_index(&mut self, index: usize) {
-        use std::iter;
-
-        let required_len = index + 1;
-        if required_len > MAX_VALUES {
-            panic!("maximum number of values {} reached!", MAX_VALUES);
-        }
-        if required_len > self.values.len() {
-            let missing_len = required_len - self.values.len();
-            self.values.reserve(missing_len);
-            self.values.extend(iter::repeat(V::default()).take(missing_len));
-        }
-    }
 }
 
 enum ExecutionResult {
@@ -250,53 +231,74 @@ impl<'a, V: LittleValue> io::Read for InterpreterStream<'a, V> {
     }
 }
 
-pub struct Process<'a, V: 'a> {
-    instructions: Vec<Instruction>,
-    constants: Options<Constant, V>,
-    calls: Options<Call, &'a Function<V>>,
+struct Values<'a, V: 'a> {
+    stack: Vec<V>,
+    values: Vec<V>,
+    parameters: Options<Parameter, V>,
+    process: &'a Process<'a, V>,
 }
 
-impl<'a, V: LittleValue + 'a> Run<'a, V> for Process<'a, V> {
-    type Stream = InterpreterStream<'a, V>;
-
-    fn run(&'a self, parameters: Options<Parameter, V>) -> InterpreterStream<'a, V> {
-        InterpreterStream {
-            pc: 0,
-            buf: Vec::new(),
-            values: Values {
-                stack: Vec::new(),
-                values: Vec::new(),
-                process: self,
-                parameters: parameters,
-            }
-        }
-    }
-}
-
-impl Interpreter {
-    pub fn new() -> Interpreter {
-        Interpreter
-    }
-}
-
-impl<'a, V: LittleValue + 'a> BuildProcessor<'a, V> for Interpreter {
-    type Output = Process<'a, V>;
-
-    /// Loads the interpreter's processor.
-    ///
-    /// Also maps templates call indices to runtime calls.
-    fn build_processor(
-        &'a mut self,
-        template: Template<V>,
-        calls: &'a HashMap<&'a str, &'a (Function<V> + 'a)>
-    ) -> Result<Process<V>, CallMapError> {
-        Ok(Process::<V> {
-            instructions: template.instructions,
-            constants: template.constants,
-            calls:  match template.calls_template.build(calls) {
-                Ok(built) => built,
-                Err(options::Error::ParameterMissing(s)) => return Err(CallMapError::NotFound(s)),
+impl<'a, V: LittleValue> Values<'a, V> {
+    fn get_mem_value(&self, mem: &Mem) -> Result<Cow<V>, LittleError> {
+        Ok(match *mem {
+            Mem::Binding(i) => self.get(i),
+            Mem::Param(i) => match self.parameters.get(i) {
+                Some(value) => Cow::Borrowed(value),
+                None => return Err(LittleError::ParameterMissing(i)),
+            },
+            Mem::Const(i) => match self.process.constants.get(i) {
+                Some(value) => Cow::Borrowed(value),
+                None => return Err(LittleError::ConstantMissing(i)),
+            },
+            Mem::StackTop1 => match self.stack.last() {
+                Some(value) => Cow::Borrowed(value),
+                None => return Err(LittleError::StackUnderflow),
+            },
+            Mem::StackTop2 => match self.stack.get(self.stack.len() - 2) {
+                Some(value) => Cow::Borrowed(value),
+                None => return Err(LittleError::StackUnderflow),
             },
         })
+    }
+
+    fn set(&mut self, Binding(index): Binding, value: V) {
+        let i = index as usize;
+        self.ensure_capacity_for_index(i);
+        * unsafe { self.values.get_unchecked_mut(i) } = value;
+    }
+
+    fn get<'r>(&'r self, Binding(index): Binding) -> Cow<'r, V> {
+        let i = index as usize;
+        if i >= self.values.len() {
+            Cow::Owned(V::default())
+        } else {
+            Cow::Borrowed(self.values.get(i).unwrap())
+        }
+    }
+
+    #[cfg(feature="nightly")]
+    fn ensure_capacity_for_index(&mut self, index: usize) {
+        let required_len = index + 1;
+        if required_len > MAX_VALUES {
+            panic!("maximum number of values {} reached!", MAX_VALUES);
+        }
+        if required_len > self.values.len() {
+            self.values.resize(required_len, V::default());
+        }
+    }
+
+    #[cfg(not(feature="nightly"))]
+    fn ensure_capacity_for_index(&mut self, index: usize) {
+        use std::iter;
+
+        let required_len = index + 1;
+        if required_len > MAX_VALUES {
+            panic!("maximum number of values {} reached!", MAX_VALUES);
+        }
+        if required_len > self.values.len() {
+            let missing_len = required_len - self.values.len();
+            self.values.reserve(missing_len);
+            self.values.extend(iter::repeat(V::default()).take(missing_len));
+        }
     }
 }

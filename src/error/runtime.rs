@@ -7,7 +7,7 @@ use {
     Call,
 };
 
-/// Interpreter execution error.
+/// Runtime error.
 #[derive(Debug)]
 pub enum LittleError {
     /// A parameter was required for an instruction, but it was not found.
@@ -60,5 +60,5 @@ impl error::Error for LittleError {
     }
 }
 
-/// Interpreter result.
+/// Runtime result.
 pub type LittleResult<V> = Result<V, Box<error::Error>>;
