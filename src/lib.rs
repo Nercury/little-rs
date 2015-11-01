@@ -18,6 +18,7 @@ mod template;
 mod error;
 
 pub mod interpreter;
+pub mod compiler;
 pub mod stream;
 pub mod bytecode;
 
