@@ -5,7 +5,7 @@
 <style>.sidebar { margin-top: 53px }</style>
 */
 
-#![cfg_attr(feature="nightly", feature(drain, vec_resize))]
+#![cfg_attr(feature="nightly", feature(test, drain))]
 
 use std::collections::HashMap;
 use std::io;
@@ -15,6 +15,7 @@ mod options;
 pub mod interpreter;
 mod template;
 mod error;
+pub mod stream;
 
 pub use options::{ OptionsTemplate, Options };
 pub use template::{ Template };
