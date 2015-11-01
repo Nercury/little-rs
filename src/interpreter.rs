@@ -9,7 +9,6 @@ use options;
 
 use {
     Options,
-    Parameter,
     Call,
     Constant,
     Binding,
@@ -67,7 +66,7 @@ pub struct Process<'a, V: 'a> {
 impl<'a, V: LittleValue + 'a> Run<'a, V> for Process<'a, V> {
     type Stream = InterpreterStream<'a, V>;
 
-    fn run(&'a self, parameters: Options<Parameter, V>) -> InterpreterStream<'a, V> {
+    fn run(&'a self, data: V) -> InterpreterStream<'a, V> {
         InterpreterStream {
             pc: 0,
             buf: Vec::new(),
@@ -75,9 +74,13 @@ impl<'a, V: LittleValue + 'a> Run<'a, V> for Process<'a, V> {
                 stack: Vec::new(),
                 values: Vec::new(),
                 process: self,
-                parameters: parameters,
+                parameters: data,
             }
         }
+    }
+
+    fn get_fingerprint(&self) -> [u8;20] {
+        [0;20]
     }
 }
 
@@ -111,35 +114,38 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
         match self.values.process.instructions.get(self.pc) {
             Some(i) => {
                 match *i {
-                    Instruction::Output(ref m) => {
-                        try!(write!(self.buf, "{}", try!(self.values.get_mem_value(m))))
+                    Instruction::Output { ref location } => {
+                        try!(write!(self.buf, "{}", try!(self.values.get_mem_value(location))))
                     },
-                    Instruction::Pop(mut c) => while c > 0 {
+                    Instruction::Property { mut name } => {
+                        unreachable!("execute Property not implemented")
+                    },
+                    Instruction::Pop { mut times } => while times > 0 {
                         if let None = self.values.stack.pop() {
                             return Err(LittleError::StackUnderflow);
                         }
-                        c -= 1;
+                        times -= 1;
                     },
-                    Instruction::Push(ref m) => {
-                        let value = try!(self.values.get_mem_value(m)).into_owned();
+                    Instruction::Push { ref location } => {
+                        let value = try!(self.values.get_mem_value(location)).into_owned();
                         self.values.stack.push(value);
                     },
-                    Instruction::Load(binding, ref m) => {
-                        let value = try!(self.values.get_mem_value(m)).into_owned();
+                    Instruction::Load { binding, ref location } => {
+                        let value = try!(self.values.get_mem_value(location)).into_owned();
                         self.values.set(binding, value);
                     },
-                    Instruction::Jump(loc) => {
-                        self.pc = loc as usize;
+                    Instruction::Jump { pc } => {
+                        self.pc = pc as usize;
                         return Ok(ExecutionResult::Continue);
                     },
-                    Instruction::CondJump(loc, ref m, cond) => {
-                        let value = try!(self.values.get_mem_value(m));
+                    Instruction::CondJump { pc, ref location, test } => {
+                        let value = try!(self.values.get_mem_value(location));
                         let value_ref = value.as_ref();
                         let stack = match self.values.stack.last() {
                             Some(value) => value,
                             None => return Err(LittleError::StackUnderflow),
                         };
-                        let should_jump = match cond {
+                        let should_jump = match test {
                             Cond::Eq => stack == value_ref,
                             Cond::Gt => stack > value_ref,
                             Cond::Gte => stack >= value_ref,
@@ -148,11 +154,11 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
                             Cond::Ne => stack != value_ref,
                         };
                         if should_jump {
-                            self.pc = loc as usize;
+                            self.pc = pc as usize;
                             return Ok(ExecutionResult::Continue);
                         }
                     },
-                    Instruction::Call(call, argc, returns) => {
+                    Instruction::Call { call, argc, push_result_to_stack } => {
                         let fun = match self.values.process.calls.get(call) {
                             Some(f) => f,
                             None => return Err(LittleError::CallMissing(call)),
@@ -161,7 +167,7 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
                         let stack_len = self.values.stack.len();
                         let result = fun.invoke(&self.values.stack[stack_len - argc as usize .. stack_len]);
 
-                        if returns {
+                        if push_result_to_stack {
                             self.values.stack.push(result.unwrap());
                         }
                     },
@@ -234,7 +240,7 @@ impl<'a, V: LittleValue> io::Read for InterpreterStream<'a, V> {
 struct Values<'a, V: 'a> {
     stack: Vec<V>,
     values: Vec<V>,
-    parameters: Options<Parameter, V>,
+    parameters: V,
     process: &'a Process<'a, V>,
 }
 
@@ -242,10 +248,18 @@ impl<'a, V: LittleValue> Values<'a, V> {
     fn get_mem_value(&self, mem: &Mem) -> Result<Cow<V>, LittleError> {
         Ok(match *mem {
             Mem::Binding(i) => self.get(i),
-            Mem::Param(i) => match self.parameters.get(i) {
-                Some(value) => Cow::Borrowed(value),
-                None => return Err(LittleError::ParameterMissing(i)),
+            Mem::Parameter { name } => {
+                unreachable!("get_mem_value Parameter not implemented")
+                // let name = match self.parameters.get(name) {
+                //     Some(value) => Cow::Borrowed(value),
+                //     None => return Err(LittleError::ParameterMissing(i)),
+                // };
+                // match self.parameters.get(i) {
+                //     Some(value) => Cow::Borrowed(value),
+                //     None => return Err(LittleError::ParameterMissing(i)),
+                // }
             },
+            Mem::Parameters => { Cow::Borrowed(&self.parameters) },
             Mem::Const(i) => match self.process.constants.get(i) {
                 Some(value) => Cow::Borrowed(value),
                 None => return Err(LittleError::ConstantMissing(i)),

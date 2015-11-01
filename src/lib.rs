@@ -8,6 +8,7 @@
 #![cfg_attr(feature="nightly", feature(test, drain))]
 
 extern crate byteorder;
+extern crate crypto;
 
 use std::collections::HashMap;
 use std::io;
@@ -27,9 +28,6 @@ pub use template::{ Template };
 pub use error::seek::SeekError;
 pub use error::runtime::{ LittleError, LittleResult };
 
-/// Immutable runtime parameter for machine.
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub struct Parameter(pub u32);
 /// Mutable internal machine binding.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Binding(pub u32);
@@ -47,10 +45,12 @@ pub struct Constant(pub u32);
 pub enum Mem {
     /// Constant item.
     Const(Constant),
-    /// Param item.
-    Param(Parameter),
     /// Binding.
     Binding(Binding),
+    /// Parameter with name.
+    Parameter { name: Constant },
+    /// All parameters.
+    Parameters,
     /// Last value on stack.
     StackTop1,
     /// Last - 1 value on stack.
@@ -80,19 +80,21 @@ pub enum Cond {
 #[derive(Copy, Clone, Debug)]
 pub enum Instruction {
     /// Output specified `Mem`.
-    Output(Mem),
+    Output { location: Mem },
+    /// Put a property named `Mem` into `StackTop2` for value in `StackTop1`.
+    Property { name: Mem },
     /// Push data from `Mem` to stack.
-    Push(Mem),
+    Push { location: Mem },
     /// Pop specified number of stack items.
-    Pop(u16),
+    Pop { times: u16 },
     /// Jump to instruction.
-    Jump(u16),
+    Jump { pc: u16 },
     /// Jump to instruction based on `Cond`.
-    CondJump(u16, Mem, Cond),
+    CondJump { pc: u16, location: Mem, test: Cond },
     /// Call function with specified amount of stack items and store result to stack if bool = true.
-    Call(Call, u8, bool),
+    Call { call: Call, argc: u8, push_result_to_stack: bool },
     /// Copy value from `Mem` to `Binding`.
-    Load(Binding, Mem),
+    Load { binding: Binding, location: Mem },
     /// Interupt execution, it is up to the user to know what to do with the stack at current state.
     Interupt,
 }
@@ -136,11 +138,24 @@ pub trait BuildProcessor<'a, V> {
 pub trait Run<'a, V> {
     type Stream: io::Read;
 
-    fn run(&'a self, parameters: Options<Parameter, V>) -> Self::Stream;
+    fn run(&'a self, V) -> Self::Stream;
+    fn get_fingerprint(&self) -> [u8;20];
 }
 
-/// User value has to implement this trait.
 pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display { }
+
+/// User constant has to implement this trait.
+pub trait LittleConstant : AsValue + FromValue + Eq + PartialOrd + fmt::Display { }
+
+pub trait FromValue: Sized {
+    type Output;
+    fn from_value(&self) -> Option<Self::Output>;
+}
+
+pub trait AsValue {
+    type Output;
+    fn as_value(&self) -> Self::Output;
+}
 
 /// Seek to an offset.
 pub trait PositionSeek {

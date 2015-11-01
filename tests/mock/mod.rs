@@ -1,6 +1,6 @@
 use std::fmt;
 
-use little::LittleValue;
+use little::{ LittleValue, LittleConstant, AsValue, FromValue };
 
 /// Simple value implementation.
 #[derive(Clone, Eq, PartialEq, PartialOrd)]
@@ -9,6 +9,24 @@ pub enum Value {
     Int(i64),
     Str(String)
 }
+
+impl FromValue for Value {
+    type Output = Value;
+
+    fn from_value(&self) -> Option<Self::Output> {
+        Some(self.clone())
+    }
+}
+
+impl AsValue for Value {
+    type Output = Value;
+
+    fn as_value(&self) -> Self::Output {
+        self.clone()
+    }
+}
+
+impl LittleConstant for Value { }
 
 impl LittleValue for Value { }
 

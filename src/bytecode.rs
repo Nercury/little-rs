@@ -6,6 +6,11 @@ use std::io;
 use std::mem;
 use byteorder::{ self, LittleEndian, ReadBytesExt, WriteBytesExt };
 
+/// Bytecode representation.
+pub trait Bytecode {
+    
+}
+
 /// Serialize and deserialize a structure from `io`.
 pub trait Serializer {
     /// Write contents to io `writer`, returns bytes written.

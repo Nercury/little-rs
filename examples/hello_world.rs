@@ -53,13 +53,13 @@ fn main() {
     let template = Template::empty()
         .push_instructions(vec![
             // Push constant 0 to stack. It is mapped to "Hello" in this template.
-            Instruction::Push(Mem::Const(Constant(0))),
+            Instruction::Push { location: Mem::Const(Constant(0)) },
             // Push template parameter 1 to stack. It will be received on the "run" call.
-            Instruction::Push(Mem::Param(Parameter(1))),
+            Instruction::Push { location: Mem::Parameters },
             // Call function mapped to 0 with 2 arguments and put the return value in stack.
-            Instruction::Call(Call(0), 2, true),
+            Instruction::Call { call: Call(0), argc: 2, push_result_to_stack: true },
             // Result is on the stack, output the stack top.
-            Instruction::Output(Mem::StackTop1),
+            Instruction::Output { location: Mem::StackTop1 },
         ])
         // Map "join" function to 0. Actual function will be received when interpreter is
         // constructed.
@@ -76,9 +76,7 @@ fn main() {
     // Run template with parameters and print the output.
     let mut output = String::new();
     p.run(
-        Options::new(vec![
-            (Parameter(1), Value::Str("World".into()))
-        ].into_iter().collect())
+        Value::Str("World".into())
     )
         .read_to_string(&mut output)
         .unwrap();

@@ -6,8 +6,6 @@ use {
     Function,
     CallMapError,
     BuildProcessor,
-    Options,
-    Parameter,
 };
 
 pub struct Compiler;
@@ -35,8 +33,12 @@ pub struct Process;
 impl<'a, V> Run<'a, V> for Process {
     type Stream = CompilerStream;
 
-    fn run(&'a self, parameters: Options<Parameter, V>) -> Self::Stream {
+    fn run(&'a self, data: V) -> Self::Stream {
         CompilerStream
+    }
+
+    fn get_fingerprint(&self) -> [u8;20] {
+        [0;20]
     }
 }
 
@@ -45,5 +47,23 @@ pub struct CompilerStream;
 impl io::Read for CompilerStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         Ok(0)
+    }
+}
+
+mod ooo {
+    use std::io;
+
+    #[allow(non_camel_case_types)]
+    pub struct template_ooo;
+
+    impl template_ooo {
+        pub fn output<I, O>(input: &mut I, output: &mut O)
+            -> Result<(), io::Error>
+        where
+            I: io::Read + io::Seek, O: io::Write
+        {
+
+            Ok(())
+        }
     }
 }

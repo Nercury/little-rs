@@ -2,7 +2,6 @@ use std::fmt;
 use std::io;
 use std::error;
 use {
-    Parameter,
     Constant,
     Call,
 };
@@ -11,7 +10,7 @@ use {
 #[derive(Debug)]
 pub enum LittleError {
     /// A parameter was required for an instruction, but it was not found.
-    ParameterMissing(Parameter),
+    ParameterMissing(String),
     /// A constant was required for an instruction, but it was not found.
     ConstantMissing(Constant),
     /// A call was required for an instruction, but it was not found.
@@ -35,7 +34,7 @@ impl From<io::Error> for LittleError {
 impl fmt::Display for LittleError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            LittleError::ParameterMissing(p) => write!(f, "Parameter {:?} is missing.", p),
+            LittleError::ParameterMissing(ref p) => write!(f, "Parameter {:?} is missing.", p),
             LittleError::ConstantMissing(c) => write!(f, "Constant {:?} is missing.", c),
             LittleError::CallMissing(c) => write!(f, "Call {:?} is missing.", c),
             LittleError::CallError(ref e) => e.fmt(f),
