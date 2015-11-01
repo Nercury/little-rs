@@ -2,7 +2,7 @@
 
 use std::io::{ self, Read, Seek, Write, SeekFrom, ErrorKind };
 
-/// Copy `len` bytes from `reader` to `writer` using `buf`.
+/// Copy all bytes from `reader` to `writer` using `buf`.
 ///
 /// ## Example
 ///
