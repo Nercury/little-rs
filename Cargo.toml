@@ -8,5 +8,8 @@ license = "MIT"
 description = "Little interpreter designed as fast template backend."
 readme = "README.md"
 
+[dependencies]
+byteorder = "0.3.13"
+
 [features]
 nightly = []

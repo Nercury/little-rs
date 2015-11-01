@@ -7,15 +7,19 @@
 
 #![cfg_attr(feature="nightly", feature(test, drain))]
 
+extern crate byteorder;
+
 use std::collections::HashMap;
 use std::io;
 use std::fmt;
 
 mod options;
-pub mod interpreter;
 mod template;
 mod error;
+
+pub mod interpreter;
 pub mod stream;
+pub mod bytecode;
 
 pub use options::{ OptionsTemplate, Options };
 pub use template::{ Template };
