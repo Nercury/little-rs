@@ -28,7 +28,9 @@ impl AsValue for Value {
 
 impl LittleConstant for Value { }
 
-impl LittleValue for Value { }
+impl LittleValue for Value {
+    type Constant = Value;
+}
 
 impl Default for Value {
     fn default() -> Value {

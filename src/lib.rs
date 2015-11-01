@@ -142,7 +142,9 @@ pub trait Run<'a, V> {
     fn get_fingerprint(&self) -> [u8;20];
 }
 
-pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display { }
+pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display {
+    type Constant: LittleConstant;
+}
 
 /// User constant has to implement this trait.
 pub trait LittleConstant : AsValue + FromValue + Eq + PartialOrd + fmt::Display { }
