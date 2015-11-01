@@ -43,7 +43,7 @@ pub fn buf_copy<I, O>(buf: &mut [u8], reader: &mut I, writer: &mut O)
 /// use little::stream;
 /// use std::io::Cursor;
 ///
-/// let data: Vec<u8> = "it is interesting".into();
+/// let data: &[u8] = b"it is interesting";
 /// let mut reader = Cursor::new(data);
 /// let mut writer = Vec::new();
 ///
