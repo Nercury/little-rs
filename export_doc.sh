@@ -1,7 +1,12 @@
 echo "DOC=$DOC"
 
+if [[ $TRAVIS_BRANCH != 'master' ]]
+    echo "skipping doc export because branch is not master"
+    exit;
+fi
+
 if [ "$DOC" != "true" ]; then
-    echo "skipping doc export"
+    echo "skipping doc export because not enabled for this build"
     exit;
 fi
 
