@@ -139,7 +139,7 @@ pub trait Build<'a, V> {
         -> LittleResult<Self::Output>;
 }
 
-/// Used by processors to produce readable stream based on provided parameters.
+/// Executes compiled blob and converts input value to output stream.
 pub trait Execute<'a, V> {
     type Stream: io::Read;
 
@@ -153,6 +153,7 @@ pub trait Execute<'a, V> {
     fn get_env(&self) -> Fingerprint;
 }
 
+/// Little Value abstraction, used by runtime.
 pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display {
     type Constant: LittleConstant;
 }
@@ -160,11 +161,13 @@ pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display {
 /// User constant has to implement this trait.
 pub trait LittleConstant : AsValue + FromValue + Eq + PartialOrd + fmt::Display { }
 
+/// Creates Self from other value.
 pub trait FromValue: Sized {
     type Output;
-    fn from_value(&self) -> Option<Self::Output>;
+    fn from_value() -> Option<Self::Output>;
 }
 
+/// Converts Self to other value.
 pub trait AsValue {
     type Output;
     fn as_value(&self) -> Self::Output;
