@@ -15,7 +15,7 @@ use mock::Value;
 fn error_if_missing_constant() {
     let funs = HashMap::new();
     let mut i = Interpreter::new();
-    let p = i.build_processor(
+    let p = i.build(
         Template::empty()
             .push_instructions(vec![
                 Instruction::Output { location: Mem::Const(Constant(1)) },
@@ -25,7 +25,7 @@ fn error_if_missing_constant() {
 
     let mut res = String::new();
 
-    let res = p.run(Value::Null)
+    let res = p.execute(Value::Null)
         .read_to_string(&mut res)
         .err()
         .expect("expected to receive error from read");
@@ -37,7 +37,7 @@ fn error_if_missing_constant() {
 fn can_handle_interupt() {
     let funs = HashMap::new();
     let mut i = Interpreter::new();
-    let p = i.build_processor(
+    let p = i.build(
         Template::empty()
             .push_constant(Constant(1), Value::Str("Abr".into()))
             .push_instructions(vec![
@@ -51,7 +51,7 @@ fn can_handle_interupt() {
     let mut res = String::new();
     let mut received_interupt = false;
 
-    let mut interpreter = p.run(Value::Null);
+    let mut interpreter = p.execute(Value::Null);
     loop {
         match interpreter.read_to_string(&mut res) {
             Err(e) => {
@@ -72,7 +72,7 @@ fn can_handle_interupt() {
 fn error_if_missing_const() {
     let funs = HashMap::new();
     let mut i = Interpreter::new();
-    let p = i.build_processor(
+    let p = i.build(
         Template::<Value>::empty()
             .push_instructions(vec![
                 Instruction::Output { location: Mem::Const(Constant(1)) }
@@ -82,7 +82,7 @@ fn error_if_missing_const() {
 
     let mut res = String::new();
 
-    let res = p.run(Value::Null)
+    let res = p.execute(Value::Null)
         .read_to_string(&mut res)
         .err()
         .expect("expected to receive error from read");
@@ -94,7 +94,7 @@ fn error_if_missing_const() {
 fn error_if_pop_empty_stack() {
     let funs = HashMap::new();
     let mut i = Interpreter::new();
-    let p = i.build_processor(
+    let p = i.build(
         Template::empty()
             .push_instructions(vec![
                 Instruction::Pop { times: 1 }
@@ -104,7 +104,7 @@ fn error_if_pop_empty_stack() {
 
     let mut res = String::new();
 
-    let res = p.run(Value::Null)
+    let res = p.execute(Value::Null)
         .read_to_string(&mut res)
         .err()
         .expect("expected to receive error from read");
@@ -240,7 +240,7 @@ fn run_function() {
     funs.insert("add", &add as &Function<Value>);
 
     let mut i = Interpreter::new();
-    let p = i.build_processor(
+    let p = i.build(
         Template::<Value>::empty()
             .push_call("add", Call(1))
             .push_constant(Constant(1), Value::Int(2))
@@ -256,7 +256,7 @@ fn run_function() {
 
     let mut res = String::new();
 
-    p.run(Value::Null)
+    p.execute(Value::Null)
         .read_to_string(&mut res)
         .unwrap();
 
@@ -405,7 +405,7 @@ fn from_instructions_and_params(
 ) -> String {
     let funs = HashMap::new();
     let mut i = Interpreter::new();
-    let p = i.build_processor(
+    let p = i.build(
         Template::empty()
             .push_instructions(instructions),
         &funs
@@ -413,7 +413,7 @@ fn from_instructions_and_params(
 
     let mut res = String::new();
 
-    p.run(params)
+    p.execute(params)
         .read_to_string(&mut res)
         .unwrap();
 
@@ -433,14 +433,14 @@ fn from_instructions_and_constants(
 
     let funs = HashMap::new();
     let mut i = Interpreter::new();
-    let p = i.build_processor(
+    let p = i.build(
         template,
         &funs
     ).unwrap();
 
     let mut res = String::new();
 
-    p.run(Value::Null)
+    p.execute(Value::Null)
         .read_to_string(&mut res)
         .unwrap();
 

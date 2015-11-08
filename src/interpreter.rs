@@ -15,10 +15,11 @@ use {
     Instruction,
     Cond,
     Mem,
-    Run,
+    Execute,
+    Fingerprint,
     LittleValue,
     Template,
-    BuildProcessor,
+    Build,
     Function,
     CallMapError,
     LittleError,
@@ -35,13 +36,13 @@ impl Interpreter {
     }
 }
 
-impl<'a, V: LittleValue + 'a> BuildProcessor<'a, V> for Interpreter {
+impl<'a, V: LittleValue + 'a> Build<'a, V> for Interpreter {
     type Output = Process<'a, V>;
 
     /// Loads the interpreter's processor.
     ///
     /// Also maps templates call indices to runtime calls.
-    fn build_processor(
+    fn build(
         &'a mut self,
         template: Template<V>,
         calls: &'a HashMap<&'a str, &'a (Function<V> + 'a)>
@@ -63,10 +64,10 @@ pub struct Process<'a, V: 'a> {
     calls: Options<Call, &'a Function<V>>,
 }
 
-impl<'a, V: LittleValue + 'a> Run<'a, V> for Process<'a, V> {
+impl<'a, V: LittleValue + 'a> Execute<'a, V> for Process<'a, V> {
     type Stream = InterpreterStream<'a, V>;
 
-    fn run(&'a self, data: V) -> InterpreterStream<'a, V> {
+    fn execute(&'a self, data: V) -> InterpreterStream<'a, V> {
         InterpreterStream {
             pc: 0,
             buf: Vec::new(),
@@ -79,8 +80,8 @@ impl<'a, V: LittleValue + 'a> Run<'a, V> for Process<'a, V> {
         }
     }
 
-    fn get_fingerprint(&self) -> [u8;20] {
-        [0;20]
+    fn get_fingerprint(&self) -> Fingerprint {
+        Fingerprint([0;20])
     }
 }
 

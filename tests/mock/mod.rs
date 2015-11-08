@@ -3,7 +3,7 @@ use std::fmt;
 use little::{ LittleValue, LittleConstant, AsValue, FromValue };
 
 /// Simple value implementation.
-#[derive(Clone, Eq, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
 pub enum Value {
     Null,
     Int(i64),

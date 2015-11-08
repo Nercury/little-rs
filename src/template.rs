@@ -7,6 +7,7 @@ use {
 };
 
 /// All the data required to load the processor.
+#[derive(Debug)]
 pub struct Template<V> {
     pub constants: Options<Constant, V>,
     pub calls_template: OptionsTemplate<Call>,

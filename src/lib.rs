@@ -9,6 +9,7 @@
 
 extern crate byteorder;
 extern crate crypto;
+#[macro_use] extern crate log;
 
 use std::collections::HashMap;
 use std::io;
@@ -118,16 +119,19 @@ pub enum CallMapError {
     NotFound(String),
 }
 
+/// Structure used to uniquely identify executable blobs.
+pub struct Fingerprint([u8;20]);
+
 /// Converts template into a runable version.
 ///
 /// Consumes `Template` and produces object that has `Run` trait,
 /// so it is possible to call `run` on it.
 ///
 /// Also requires `calls` list that could be mapped to calls required by processor.
-pub trait BuildProcessor<'a, V> {
-    type Output: Run<'a, V>;
+pub trait Build<'a, V> {
+    type Output: Execute<'a, V>;
 
-    fn build_processor(
+    fn build(
         &'a mut self,
         template: Template<V>,
         calls: &'a HashMap<&'a str, &'a (Function<V> + 'a)>
@@ -135,11 +139,14 @@ pub trait BuildProcessor<'a, V> {
 }
 
 /// Used by processors to produce readable stream based on provided parameters.
-pub trait Run<'a, V> {
+pub trait Execute<'a, V> {
     type Stream: io::Read;
 
-    fn run(&'a self, V) -> Self::Stream;
-    fn get_fingerprint(&self) -> [u8;20];
+    /// Run this executable.
+    fn execute(&'a self, V) -> Self::Stream;
+
+    /// Get executable fingerprint that uniquely identifies it.
+    fn get_fingerprint(&self) -> Fingerprint;
 }
 
 pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display {

@@ -1,4 +1,6 @@
 extern crate little;
+#[macro_use] extern crate log;
+extern crate env_logger;
 
 mod mock;
 
@@ -11,11 +13,13 @@ use little::compiler::Compiler;
 
 use mock::Value;
 
-//#[test]
+#[test]
 fn output_param() {
+    env_logger::init().unwrap();
+
     let funs = HashMap::new();
     let mut i = Compiler::new();
-    let p = i.build_processor(
+    let p = i.build(
         Template::<Value>::empty()
             .push_instructions(vec![
                 Instruction::Output { location: Mem::Parameters }
@@ -25,7 +29,7 @@ fn output_param() {
 
     let mut res = String::new();
 
-    p.run(Value::Str("Hello".into()))
+    p.execute(Value::Str("Hello".into()))
         .read_to_string(&mut res)
         .unwrap();
 

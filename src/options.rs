@@ -9,6 +9,7 @@ pub enum Error {
 }
 
 /// Stores a map between String name and its index `I`.
+#[derive(Debug)]
 pub struct OptionsTemplate<I> {
     key_indices: HashMap<String, I>,
 }
@@ -55,7 +56,8 @@ impl<I: Eq + Hash + Copy> OptionsTemplate<I> {
 }
 
 /// Runtime options maped to index list.
-pub struct Options<I, V> {
+#[derive(Debug)]
+pub struct Options<I: Eq + Hash, V> {
     map: HashMap<I, V>,
 }
 

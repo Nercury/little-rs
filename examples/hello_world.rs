@@ -10,7 +10,7 @@ use little::interpreter::Interpreter;
 /// Simple value implementation.
 /// You can provide your own value implementation for interpreter,
 /// it is generic.
-#[derive(Clone, Eq, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
 pub enum Value {
     Null,
     Str(String)
@@ -96,11 +96,11 @@ fn main() {
 
     // Create the processor for this template and map its functions to function list.
     // It would fail if some functions are not found.
-    let p = i.build_processor(template, &funs).unwrap();
+    let p = i.build(template, &funs).unwrap();
 
     // Run template with parameters and print the output.
     let mut output = String::new();
-    p.run(
+    p.execute(
         Value::Str("World".into())
     )
         .read_to_string(&mut output)

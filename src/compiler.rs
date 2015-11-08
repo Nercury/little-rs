@@ -1,44 +1,49 @@
 use std::collections::HashMap;
 use std::io;
+use std::fmt;
 use {
-    Run,
+    Execute,
+    Fingerprint,
     Template,
     Function,
     CallMapError,
-    BuildProcessor,
+    Build,
 };
 
 pub struct Compiler;
 
 impl Compiler {
     pub fn new() -> Compiler {
+        trace!("create new compiler");
         Compiler
     }
 }
 
-impl<'a, V> BuildProcessor<'a, V> for Compiler {
+impl<'a, V: fmt::Debug> Build<'a, V> for Compiler {
     type Output = Process;
 
-    fn build_processor(
+    fn build(
         &'a mut self,
         template: Template<V>,
         calls: &'a HashMap<&'a str, &'a (Function<V> + 'a)>
     ) -> Result<Self::Output, CallMapError> {
+        trace!("build process for compiler with template {:#?} and calls {:#?}", template, calls.keys().collect::<Vec<_>>());
         Ok(Process)
     }
 }
 
 pub struct Process;
 
-impl<'a, V> Run<'a, V> for Process {
+impl<'a, V: fmt::Debug> Execute<'a, V> for Process {
     type Stream = CompilerStream;
 
-    fn run(&'a self, data: V) -> Self::Stream {
+    fn execute(&'a self, data: V) -> Self::Stream {
+        trace!("run process with data {:#?}", data);
         CompilerStream
     }
 
-    fn get_fingerprint(&self) -> [u8;20] {
-        [0;20]
+    fn get_fingerprint(&self) -> Fingerprint {
+        Fingerprint([0;20])
     }
 }
 
@@ -58,12 +63,12 @@ mod ooo {
 
     impl template_ooo {
         pub fn output<I, O>(input: &mut I, output: &mut O)
-            -> Result<(), io::Error>
+            -> Result<usize, io::Error>
         where
             I: io::Read + io::Seek, O: io::Write
         {
 
-            Ok(())
+            Ok(0)
         }
     }
 }
