@@ -6,8 +6,9 @@ use {
     Fingerprint,
     Template,
     Function,
-    CallMapError,
+    BuildError,
     Build,
+    LittleResult,
 };
 
 pub struct Compiler;
@@ -20,29 +21,43 @@ impl Compiler {
 }
 
 impl<'a, V: fmt::Debug> Build<'a, V> for Compiler {
-    type Output = Process;
+    type Output = Executable;
 
     fn build(
         &'a mut self,
+        id: &str,
         template: Template<V>,
         calls: &'a HashMap<&'a str, &'a (Function<V> + 'a)>
-    ) -> Result<Self::Output, CallMapError> {
-        trace!("build process for compiler with template {:#?} and calls {:#?}", template, calls.keys().collect::<Vec<_>>());
-        Ok(Process)
+    ) -> LittleResult<Self::Output> {
+        trace!("build Executable for compiler with template {:#?} and calls {:#?}", template, calls.keys().collect::<Vec<_>>());
+        Ok(Executable { id: id.into() })
+    }
+
+    fn load(&'a mut self, id: &str, env: Fingerprint, calls: &'a Vec<&'a (Function<V> + 'a)>)
+        -> LittleResult<Self::Output>
+    {
+        unreachable!("compiler load not implemented");
     }
 }
 
-pub struct Process;
+pub struct Executable
+{
+    id: String,
+}
 
-impl<'a, V: fmt::Debug> Execute<'a, V> for Process {
+impl<'a, V: fmt::Debug> Execute<'a, V> for Executable {
     type Stream = CompilerStream;
 
     fn execute(&'a self, data: V) -> Self::Stream {
-        trace!("run process with data {:#?}", data);
+        trace!("run Executable with data {:#?}", data);
         CompilerStream
     }
 
-    fn get_fingerprint(&self) -> Fingerprint {
+    fn get_id<'r>(&'r self) -> &'r str {
+        &self.id
+    }
+
+    fn get_env(&self) -> Fingerprint {
         Fingerprint([0;20])
     }
 }

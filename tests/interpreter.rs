@@ -16,6 +16,7 @@ fn error_if_missing_constant() {
     let funs = HashMap::new();
     let mut i = Interpreter::new();
     let p = i.build(
+        "",
         Template::empty()
             .push_instructions(vec![
                 Instruction::Output { location: Mem::Const(Constant(1)) },
@@ -38,6 +39,7 @@ fn can_handle_interupt() {
     let funs = HashMap::new();
     let mut i = Interpreter::new();
     let p = i.build(
+        "",
         Template::empty()
             .push_constant(Constant(1), Value::Str("Abr".into()))
             .push_instructions(vec![
@@ -73,6 +75,7 @@ fn error_if_missing_const() {
     let funs = HashMap::new();
     let mut i = Interpreter::new();
     let p = i.build(
+        "",
         Template::<Value>::empty()
             .push_instructions(vec![
                 Instruction::Output { location: Mem::Const(Constant(1)) }
@@ -95,6 +98,7 @@ fn error_if_pop_empty_stack() {
     let funs = HashMap::new();
     let mut i = Interpreter::new();
     let p = i.build(
+        "",
         Template::empty()
             .push_instructions(vec![
                 Instruction::Pop { times: 1 }
@@ -241,6 +245,7 @@ fn run_function() {
 
     let mut i = Interpreter::new();
     let p = i.build(
+        "",
         Template::<Value>::empty()
             .push_call("add", Call(1))
             .push_constant(Constant(1), Value::Int(2))
@@ -406,6 +411,7 @@ fn from_instructions_and_params(
     let funs = HashMap::new();
     let mut i = Interpreter::new();
     let p = i.build(
+        "",
         Template::empty()
             .push_instructions(instructions),
         &funs
@@ -434,6 +440,7 @@ fn from_instructions_and_constants(
     let funs = HashMap::new();
     let mut i = Interpreter::new();
     let p = i.build(
+        "",
         template,
         &funs
     ).unwrap();

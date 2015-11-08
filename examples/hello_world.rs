@@ -96,7 +96,7 @@ fn main() {
 
     // Create the processor for this template and map its functions to function list.
     // It would fail if some functions are not found.
-    let p = i.build(template, &funs).unwrap();
+    let p = i.build("", template, &funs).unwrap();
 
     // Run template with parameters and print the output.
     let mut output = String::new();

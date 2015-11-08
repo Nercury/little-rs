@@ -20,6 +20,7 @@ fn output_param() {
     let funs = HashMap::new();
     let mut i = Compiler::new();
     let p = i.build(
+        "",
         Template::<Value>::empty()
             .push_instructions(vec![
                 Instruction::Output { location: Mem::Parameters }

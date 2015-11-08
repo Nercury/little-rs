@@ -27,7 +27,8 @@ pub mod bytecode;
 pub use options::{ OptionsTemplate, Options };
 pub use template::{ Template };
 pub use error::seek::SeekError;
-pub use error::runtime::{ LittleError, LittleResult };
+pub use error::little::{ LittleError, LittleResult };
+pub use error::build::{ BuildError };
 
 /// Mutable internal machine binding.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
@@ -113,12 +114,6 @@ impl<V, F: for<'z> Fn(&'z [V]) -> LittleResult<V>> Function<V> for F {
     }
 }
 
-/// Call mapping error.
-#[derive(Debug)]
-pub enum CallMapError {
-    NotFound(String),
-}
-
 /// Structure used to uniquely identify executable blobs.
 pub struct Fingerprint([u8;20]);
 
@@ -131,11 +126,17 @@ pub struct Fingerprint([u8;20]);
 pub trait Build<'a, V> {
     type Output: Execute<'a, V>;
 
+    /// Builds executable from template.
     fn build(
         &'a mut self,
+        id: &str,
         template: Template<V>,
         calls: &'a HashMap<&'a str, &'a (Function<V> + 'a)>
-    ) -> Result<Self::Output, CallMapError>;
+    ) -> LittleResult<Self::Output>;
+
+    /// Loads existing executable by unique fingerprint and env fingerprint.
+    fn load(&'a mut self, id: &str, env: Fingerprint, calls: &'a Vec<&'a (Function<V> + 'a)>)
+        -> LittleResult<Self::Output>;
 }
 
 /// Used by processors to produce readable stream based on provided parameters.
@@ -145,8 +146,11 @@ pub trait Execute<'a, V> {
     /// Run this executable.
     fn execute(&'a self, V) -> Self::Stream;
 
-    /// Get executable fingerprint that uniquely identifies it.
-    fn get_fingerprint(&self) -> Fingerprint;
+    /// Get executable's id.
+    fn get_id<'r>(&'r self) -> &'r str;
+
+    /// Get environment fingerprint required by executable.
+    fn get_env(&self) -> Fingerprint;
 }
 
 pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display {

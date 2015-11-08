@@ -21,8 +21,9 @@ use {
     Template,
     Build,
     Function,
-    CallMapError,
+    BuildError,
     LittleError,
+    LittleResult,
 };
 
 const MAX_VALUES: usize = 500000;
@@ -37,34 +38,44 @@ impl Interpreter {
 }
 
 impl<'a, V: LittleValue + 'a> Build<'a, V> for Interpreter {
-    type Output = Process<'a, V>;
+    type Output = Executable<'a, V>;
 
-    /// Loads the interpreter's processor.
+    /// Loads the interpreter's executable.
     ///
     /// Also maps templates call indices to runtime calls.
     fn build(
         &'a mut self,
+        id: &str,
         template: Template<V>,
         calls: &'a HashMap<&'a str, &'a (Function<V> + 'a)>
-    ) -> Result<Process<V>, CallMapError> {
-        Ok(Process::<V> {
+    ) -> LittleResult<Executable<V>> {
+        Ok(Executable::<V> {
+            id: id.into(),
             instructions: template.instructions,
             constants: template.constants,
-            calls:  match template.calls_template.build(calls) {
+            calls: match template.calls_template.build(calls) {
                 Ok(built) => built,
-                Err(options::Error::ParameterMissing(s)) => return Err(CallMapError::NotFound(s)),
+                Err(options::Error::ParameterMissing(s)) => return Err(BuildError::FunctionNotFound { required: s }.into()),
             },
         })
     }
+
+    /// Loads existing executable by unique fingerprint and env fingerprint.
+    fn load(&'a mut self, id: &str, env: Fingerprint, calls: &'a Vec<&'a (Function<V> + 'a)>)
+        -> LittleResult<Self::Output>
+    {
+        unreachable!("interpreter load is not implemented");
+    }
 }
 
-pub struct Process<'a, V: 'a> {
+pub struct Executable<'a, V: 'a> {
+    id: String,
     instructions: Vec<Instruction>,
     constants: Options<Constant, V>,
     calls: Options<Call, &'a Function<V>>,
 }
 
-impl<'a, V: LittleValue + 'a> Execute<'a, V> for Process<'a, V> {
+impl<'a, V: LittleValue + 'a> Execute<'a, V> for Executable<'a, V> {
     type Stream = InterpreterStream<'a, V>;
 
     fn execute(&'a self, data: V) -> InterpreterStream<'a, V> {
@@ -74,13 +85,17 @@ impl<'a, V: LittleValue + 'a> Execute<'a, V> for Process<'a, V> {
             values: Values {
                 stack: Vec::new(),
                 values: Vec::new(),
-                process: self,
+                executable: self,
                 parameters: data,
             }
         }
     }
 
-    fn get_fingerprint(&self) -> Fingerprint {
+    fn get_id<'r>(&'r self) -> &'r str {
+        &self.id
+    }
+
+    fn get_env(&self) -> Fingerprint {
         Fingerprint([0;20])
     }
 }
@@ -112,7 +127,7 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
     }
 
     fn execute(&mut self) -> Result<ExecutionResult, LittleError>  {
-        match self.values.process.instructions.get(self.pc) {
+        match self.values.executable.instructions.get(self.pc) {
             Some(i) => {
                 match *i {
                     Instruction::Output { ref location } => {
@@ -160,7 +175,7 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
                         }
                     },
                     Instruction::Call { call, argc, push_result_to_stack } => {
-                        let fun = match self.values.process.calls.get(call) {
+                        let fun = match self.values.executable.calls.get(call) {
                             Some(f) => f,
                             None => return Err(LittleError::CallMissing(call)),
                         };
@@ -242,7 +257,7 @@ struct Values<'a, V: 'a> {
     stack: Vec<V>,
     values: Vec<V>,
     parameters: V,
-    process: &'a Process<'a, V>,
+    executable: &'a Executable<'a, V>,
 }
 
 impl<'a, V: LittleValue> Values<'a, V> {
@@ -261,7 +276,7 @@ impl<'a, V: LittleValue> Values<'a, V> {
                 // }
             },
             Mem::Parameters => { Cow::Borrowed(&self.parameters) },
-            Mem::Const(i) => match self.process.constants.get(i) {
+            Mem::Const(i) => match self.executable.constants.get(i) {
                 Some(value) => Cow::Borrowed(value),
                 None => return Err(LittleError::ConstantMissing(i)),
             },
