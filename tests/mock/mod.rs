@@ -1,6 +1,8 @@
+#![allow(dead_code)]
+
 use std::fmt;
 
-use little::{ LittleValue, LittleConstant, AsValue, FromValue };
+use little::{ LittleValue, LittleConstant, AsValue };
 
 /// Simple value implementation.
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
@@ -8,14 +10,6 @@ pub enum Value {
     Null,
     Int(i64),
     Str(String)
-}
-
-impl FromValue for Value {
-    type Output = Value;
-
-    fn from_value(&self) -> Option<Self::Output> {
-        Some(self.clone())
-    }
 }
 
 impl AsValue for Value {

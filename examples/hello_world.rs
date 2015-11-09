@@ -26,15 +26,6 @@ impl LittleValue for Value {
 /// In this example, it is the same type.
 impl LittleConstant for Value { }
 
-/// Implement how to convert Value to Constant.
-impl FromValue for Value {
-    type Output = Value;
-
-    fn from_value(&self) -> Option<Self::Output> {
-        Some(self.clone())
-    }
-}
-
 /// Implement how to convert Constant to Value.
 impl AsValue for Value {
     type Output = Value;

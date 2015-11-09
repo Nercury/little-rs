@@ -159,13 +159,7 @@ pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display {
 }
 
 /// User constant has to implement this trait.
-pub trait LittleConstant : AsValue + FromValue + Eq + PartialOrd + fmt::Display { }
-
-/// Creates Self from other value.
-pub trait FromValue: Sized {
-    type Output;
-    fn from_value() -> Option<Self::Output>;
-}
+pub trait LittleConstant : AsValue + fmt::Display { }
 
 /// Converts Self to other value.
 pub trait AsValue {

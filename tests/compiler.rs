@@ -6,14 +6,13 @@ mod mock;
 
 use std::collections::HashMap;
 use std::io::Read;
-use std::error::Error;
 
 use little::*;
 use little::compiler::Compiler;
 
 use mock::Value;
 
-#[test]
+//#[test]
 fn output_param() {
     env_logger::init().unwrap();
 
