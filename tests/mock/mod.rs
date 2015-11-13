@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use little::{ LittleValue, LittleConstant, AsValue };
+use little::LittleValue;
 
 /// Simple value implementation.
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
@@ -12,19 +12,7 @@ pub enum Value {
     Str(String)
 }
 
-impl AsValue for Value {
-    type Output = Value;
-
-    fn as_value(&self) -> Self::Output {
-        self.clone()
-    }
-}
-
-impl LittleConstant for Value { }
-
-impl LittleValue for Value {
-    type Constant = Value;
-}
+impl LittleValue for Value { }
 
 impl Default for Value {
     fn default() -> Value {

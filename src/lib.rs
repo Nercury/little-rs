@@ -154,12 +154,7 @@ pub trait Execute<'a, V> {
 }
 
 /// Little Value abstraction, used by runtime.
-pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display {
-    type Constant: LittleConstant;
-}
-
-/// User constant has to implement this trait.
-pub trait LittleConstant : AsValue + fmt::Display { }
+pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display { }
 
 /// Converts Self to other value.
 pub trait AsValue {

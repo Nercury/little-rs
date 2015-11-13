@@ -17,23 +17,7 @@ pub enum Value {
 }
 
 /// One requirement: this trait needs to be implemented for it.
-impl LittleValue for Value {
-    /// It requires to specify what to use for constant value.
-    type Constant = Value;
-}
-
-/// Then we need to implement constant value for that type.
-/// In this example, it is the same type.
-impl LittleConstant for Value { }
-
-/// Implement how to convert Constant to Value.
-impl AsValue for Value {
-    type Output = Value;
-
-    fn as_value(&self) -> Self::Output {
-        self.clone()
-    }
-}
+impl LittleValue for Value { }
 
 /// And also requires Default trait.
 impl Default for Value {
