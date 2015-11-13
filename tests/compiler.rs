@@ -12,7 +12,7 @@ use little::compiler::Compiler;
 
 use mock::Value;
 
-//#[test]
+#[test]
 fn output_param() {
     env_logger::init().unwrap();
 

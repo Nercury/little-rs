@@ -156,12 +156,6 @@ pub trait Execute<'a, V> {
 /// Little Value abstraction, used by runtime.
 pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display { }
 
-/// Converts Self to other value.
-pub trait AsValue {
-    type Output;
-    fn as_value(&self) -> Self::Output;
-}
-
 /// Seek to an offset.
 pub trait PositionSeek {
     /// Seek to an offset, in position, in some container/stream.
