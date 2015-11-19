@@ -12,38 +12,40 @@ use little::interpreter::Interpreter;
 use mock::Value;
 
 #[test]
-fn error_if_missing_param() {
+fn error_if_missing_constant() {
     let funs = HashMap::new();
     let mut i = Interpreter::new();
-    let p = i.build_processor(
+    let p = i.build(
+        "",
         Template::empty()
-            .push_instructions(vec![
-                Instruction::Output(Mem::Param(Parameter(1)))
+            .with_instructions(vec![
+                Instruction::Output { location: Mem::Const(Constant(1)) },
             ]),
         &funs
     ).unwrap();
 
     let mut res = String::new();
 
-    let res = p.run(Options::<Parameter, Value>::empty())
+    let res = p.execute(Value::Null)
         .read_to_string(&mut res)
         .err()
         .expect("expected to receive error from read");
 
-    assert_eq!("parameter is missing", res.description());
+    assert_eq!("constant is missing", res.description());
 }
 
 #[test]
 fn can_handle_interupt() {
     let funs = HashMap::new();
     let mut i = Interpreter::new();
-    let p = i.build_processor(
+    let p = i.build(
+        "",
         Template::empty()
-            .push_constant(Constant(1), Value::Str("Abr".into()))
-            .push_instructions(vec![
-                Instruction::Output(Mem::Const(Constant(1))),
+            .with_constant(Constant(1), Value::Str("Abr".into()))
+            .with_instructions(vec![
+                Instruction::Output { location: Mem::Const(Constant(1)) },
                 Instruction::Interupt,
-                Instruction::Output(Mem::Const(Constant(1))),
+                Instruction::Output { location: Mem::Const(Constant(1)) },
             ]),
         &funs
     ).unwrap();
@@ -51,7 +53,7 @@ fn can_handle_interupt() {
     let mut res = String::new();
     let mut received_interupt = false;
 
-    let mut interpreter = p.run(Options::<Parameter, Value>::empty());
+    let mut interpreter = p.execute(Value::Null);
     loop {
         match interpreter.read_to_string(&mut res) {
             Err(e) => {
@@ -72,17 +74,18 @@ fn can_handle_interupt() {
 fn error_if_missing_const() {
     let funs = HashMap::new();
     let mut i = Interpreter::new();
-    let p = i.build_processor(
+    let p = i.build(
+        "",
         Template::<Value>::empty()
-            .push_instructions(vec![
-                Instruction::Output(Mem::Const(Constant(1)))
+            .with_instructions(vec![
+                Instruction::Output { location: Mem::Const(Constant(1)) }
             ]),
         &funs
     ).unwrap();
 
     let mut res = String::new();
 
-    let res = p.run(Options::empty())
+    let res = p.execute(Value::Null)
         .read_to_string(&mut res)
         .err()
         .expect("expected to receive error from read");
@@ -94,17 +97,18 @@ fn error_if_missing_const() {
 fn error_if_pop_empty_stack() {
     let funs = HashMap::new();
     let mut i = Interpreter::new();
-    let p = i.build_processor(
+    let p = i.build(
+        "",
         Template::empty()
-            .push_instructions(vec![
-                Instruction::Pop(1)
+            .with_instructions(vec![
+                Instruction::Pop { times: 1 }
             ]),
         &funs
     ).unwrap();
 
     let mut res = String::new();
 
-    let res = p.run(Options::<Parameter, Value>::empty())
+    let res = p.execute(Value::Null)
         .read_to_string(&mut res)
         .err()
         .expect("expected to receive error from read");
@@ -114,19 +118,17 @@ fn error_if_pop_empty_stack() {
 
 #[test]
 fn exit() {
-    let res = from_instructions_and_params(Vec::new(), Vec::new());
+    let res = from_instructions_and_params(Vec::new(), Value::Null);
     assert_eq!("", res);
 }
 
 #[test]
-fn output_param() {
+fn output_params() {
     let res = from_instructions_and_params(
         vec![
-            Instruction::Output(Mem::Param(Parameter(1)))
+            Instruction::Output { location: Mem::Parameters }
         ],
-        vec![
-            (Parameter(1), Value::Str("Hello".into()))
-        ]
+        Value::Str("Hello".into())
     );
 
     assert_eq!("Hello", res);
@@ -136,10 +138,10 @@ fn output_param() {
 fn should_jump() {
     let res = from_instructions_and_constants(
         vec![
-            Instruction::Output(Mem::Const(Constant(1))),
-            Instruction::Jump(3),
-            Instruction::Output(Mem::Const(Constant(2))),
-            Instruction::Output(Mem::Const(Constant(3))),
+            Instruction::Output { location: Mem::Const(Constant(1)) },
+            Instruction::Jump { pc: 3 },
+            Instruction::Output { location: Mem::Const(Constant(2)) },
+            Instruction::Output { location: Mem::Const(Constant(3)) },
         ],
         vec![
             (Constant(1), Value::Str("Hello".into())),
@@ -219,7 +221,7 @@ fn should_not_jump_if_not_ne() {
 fn output_const() {
     let res = from_instructions_and_constants(
         vec![
-            Instruction::Output(Mem::Const(Constant(1)))
+            Instruction::Output { location: Mem::Const(Constant(1)) }
         ],
         vec![
             (Constant(1), Value::Str("Const Hello".into()))
@@ -242,23 +244,24 @@ fn run_function() {
     funs.insert("add", &add as &Function<Value>);
 
     let mut i = Interpreter::new();
-    let p = i.build_processor(
+    let p = i.build(
+        "",
         Template::<Value>::empty()
-            .push_call("add", Call(1))
-            .push_constant(Constant(1), Value::Int(2))
-            .push_constant(Constant(2), Value::Int(3))
-            .push_instructions(vec![
-                Instruction::Push(Mem::Const(Constant(1))),
-                Instruction::Push(Mem::Const(Constant(2))),
-                Instruction::Call(Call(1), 2, true),
-                Instruction::Output(Mem::StackTop1),
+            .with_call("add", Call(1))
+            .with_constant(Constant(1), Value::Int(2))
+            .with_constant(Constant(2), Value::Int(3))
+            .with_instructions(vec![
+                Instruction::Push { location: Mem::Const(Constant(1)) },
+                Instruction::Push { location: Mem::Const(Constant(2)) },
+                Instruction::Call { call: Call(1), argc: 2, push_result_to_stack: true },
+                Instruction::Output { location: Mem::StackTop1 },
             ]),
         &funs
     ).unwrap();
 
     let mut res = String::new();
 
-    p.run(Options::<Parameter, Value>::empty())
+    p.execute(Value::Null)
         .read_to_string(&mut res)
         .unwrap();
 
@@ -269,8 +272,8 @@ fn run_function() {
 fn push_const_output_stack_top1() {
     let res = from_instructions_and_constants(
         vec![
-            Instruction::Push(Mem::Const(Constant(1))),
-            Instruction::Output(Mem::StackTop1),
+            Instruction::Push { location: Mem::Const(Constant(1)) },
+            Instruction::Output { location: Mem::StackTop1 },
         ],
         vec![
             (Constant(1), Value::Str("Hello Stack 1".into()))
@@ -281,16 +284,16 @@ fn push_const_output_stack_top1() {
 }
 
 #[test]
-fn push_params_output_stack_top2() {
-    let res = from_instructions_and_params(
+fn push_constants_output_stack_top2() {
+    let res = from_instructions_and_constants(
         vec![
-            Instruction::Push(Mem::Param(Parameter(2))),
-            Instruction::Push(Mem::Param(Parameter(1))),
-            Instruction::Output(Mem::StackTop2),
+            Instruction::Push { location: Mem::Const(Constant(2)) },
+            Instruction::Push { location: Mem::Const(Constant(1)) },
+            Instruction::Output { location: Mem::StackTop2 },
         ],
         vec![
-            (Parameter(1), Value::Str("Do not show this".into())),
-            (Parameter(2), Value::Str("Hello Stack 2".into())),
+            (Constant(1), Value::Str("Do not show this".into())),
+            (Constant(2), Value::Str("Hello Stack 2".into())),
         ]
     );
 
@@ -301,8 +304,8 @@ fn push_params_output_stack_top2() {
 fn load_binding_from_const_output_binding() {
     let res = from_instructions_and_constants(
         vec![
-            Instruction::Load(Binding(2), Mem::Const(Constant(1))),
-            Instruction::Output(Mem::Binding(Binding(2))),
+            Instruction::Load { binding: Binding(2), location: Mem::Const(Constant(1)) },
+            Instruction::Output { location: Mem::Binding(Binding(2)) },
         ],
         vec![
             (Constant(1), Value::Str("Hello Binding".into()))
@@ -316,12 +319,10 @@ fn load_binding_from_const_output_binding() {
 fn load_binding_from_param_output_binding() {
     let res = from_instructions_and_params(
         vec![
-            Instruction::Load(Binding(0), Mem::Param(Parameter(2))),
-            Instruction::Output(Mem::Binding(Binding(0))),
+            Instruction::Load { binding: Binding(0), location: Mem::Parameters },
+            Instruction::Output { location: Mem::Binding(Binding(0)) },
         ],
-        vec![
-            (Parameter(2), Value::Str("Hello Binding".into())),
-        ]
+        Value::Str("Hello Binding".into())
     );
 
     assert_eq!("Hello Binding", res);
@@ -329,21 +330,21 @@ fn load_binding_from_param_output_binding() {
 
 #[test]
 fn load_binding_from_binding_stack1_stack2_output3() {
-    let res = from_instructions_and_params(
+    let res = from_instructions_and_constants(
         vec![
-            Instruction::Load(Binding(0), Mem::Param(Parameter(1))),
-            Instruction::Load(Binding(2), Mem::Param(Parameter(2))),
-            Instruction::Load(Binding(1), Mem::Binding(Binding(0))),
-            Instruction::Push(Mem::Binding(Binding(2))),
-            Instruction::Push(Mem::Binding(Binding(1))),
-            Instruction::Load(Binding(3), Mem::StackTop1),
-            Instruction::Load(Binding(4), Mem::StackTop2),
-            Instruction::Output(Mem::StackTop1),
-            Instruction::Output(Mem::StackTop2),
+            Instruction::Load { binding: Binding(0), location: Mem::Const(Constant(1)) },
+            Instruction::Load { binding: Binding(2), location: Mem::Const(Constant(2)) },
+            Instruction::Load { binding: Binding(1), location: Mem::Binding(Binding(0)) },
+            Instruction::Push { location: Mem::Binding(Binding(2)) },
+            Instruction::Push { location: Mem::Binding(Binding(1)) },
+            Instruction::Load { binding: Binding(3), location: Mem::StackTop1 },
+            Instruction::Load { binding: Binding(4), location: Mem::StackTop2 },
+            Instruction::Output { location: Mem::StackTop1 },
+            Instruction::Output { location: Mem::StackTop2 },
         ],
         vec![
-            (Parameter(1), Value::Str("Hello".into())),
-            (Parameter(2), Value::Str("World".into())),
+            (Constant(1), Value::Str("Hello".into())),
+            (Constant(2), Value::Str("World".into())),
         ]
     );
 
@@ -352,18 +353,18 @@ fn load_binding_from_binding_stack1_stack2_output3() {
 
 #[test]
 fn push_from_stack_to_stack() {
-    let res = from_instructions_and_params(
+    let res = from_instructions_and_constants(
         vec![
-            Instruction::Push(Mem::Param(Parameter(1))),
-            Instruction::Push(Mem::Param(Parameter(2))),
-            Instruction::Push(Mem::StackTop1),
-            Instruction::Push(Mem::StackTop2),
-            Instruction::Output(Mem::StackTop1),
-            Instruction::Output(Mem::StackTop2),
+            Instruction::Push { location: Mem::Const(Constant(1)) },
+            Instruction::Push { location: Mem::Const(Constant(2)) },
+            Instruction::Push { location: Mem::StackTop1 },
+            Instruction::Push { location: Mem::StackTop2 },
+            Instruction::Output { location: Mem::StackTop1 },
+            Instruction::Output { location: Mem::StackTop2 },
         ],
         vec![
-            (Parameter(1), Value::Str("Hello".into())),
-            (Parameter(2), Value::Str("World".into())),
+            (Constant(1), Value::Str("Hello".into())),
+            (Constant(2), Value::Str("World".into())),
         ]
     );
 
@@ -371,14 +372,14 @@ fn push_from_stack_to_stack() {
 }
 
 #[test]
-fn output_param_twice() {
-    let res = from_instructions_and_params(
+fn output_constant_twice() {
+    let res = from_instructions_and_constants(
         vec![
-            Instruction::Output(Mem::Param(Parameter(1))),
-            Instruction::Output(Mem::Param(Parameter(1))),
+            Instruction::Output { location: Mem::Const(Constant(1)) },
+            Instruction::Output { location: Mem::Const(Constant(1)) },
         ],
         vec![
-            (Parameter(1), Value::Str("Hello".into())),
+            (Constant(1), Value::Str("Hello".into())),
         ]
     );
 
@@ -386,17 +387,17 @@ fn output_param_twice() {
 }
 
 #[test]
-fn output_different_params() {
-    let res = from_instructions_and_params(
+fn output_different_constants() {
+    let res = from_instructions_and_constants(
         vec![
-            Instruction::Output(Mem::Param(Parameter(1))),
-            Instruction::Output(Mem::Param(Parameter(3))),
-            Instruction::Output(Mem::Param(Parameter(2))),
+            Instruction::Output { location: Mem::Const(Constant(1)) },
+            Instruction::Output { location: Mem::Const(Constant(3)) },
+            Instruction::Output { location: Mem::Const(Constant(2)) },
         ],
         vec![
-            (Parameter(1), Value::Str("Hello".into())),
-            (Parameter(2), Value::Str("World".into())),
-            (Parameter(3), Value::Str(" ".into())),
+            (Constant(1), Value::Str("Hello".into())),
+            (Constant(2), Value::Str("World".into())),
+            (Constant(3), Value::Str(" ".into())),
         ]
     );
 
@@ -405,19 +406,20 @@ fn output_different_params() {
 
 fn from_instructions_and_params(
     instructions: Vec<Instruction>,
-    params: Vec<(Parameter, Value)>
+    params: Value
 ) -> String {
     let funs = HashMap::new();
     let mut i = Interpreter::new();
-    let p = i.build_processor(
+    let p = i.build(
+        "",
         Template::empty()
-            .push_instructions(instructions),
+            .with_instructions(instructions),
         &funs
     ).unwrap();
 
     let mut res = String::new();
 
-    p.run(Options::new(params.into_iter().collect()))
+    p.execute(params)
         .read_to_string(&mut res)
         .unwrap();
 
@@ -429,22 +431,23 @@ fn from_instructions_and_constants(
     constants: Vec<(Constant, Value)>
 ) -> String {
     let mut template = Template::empty()
-        .push_instructions(instructions);
+        .with_instructions(instructions);
 
     for (constant, value) in constants {
-        template = template.push_constant(constant, value);
+        template = template.with_constant(constant, value);
     }
 
     let funs = HashMap::new();
     let mut i = Interpreter::new();
-    let p = i.build_processor(
+    let p = i.build(
+        "",
         template,
         &funs
     ).unwrap();
 
     let mut res = String::new();
 
-    p.run(Options::empty())
+    p.execute(Value::Null)
         .read_to_string(&mut res)
         .unwrap();
 
@@ -455,10 +458,10 @@ fn from_instructions_and_constants(
 fn test_cond_jump(stack: i64, mem: i64, cond: Cond) -> bool {
     let res = from_instructions_and_constants(
         vec![
-            Instruction::Push(Mem::Const(Constant(2))),
-            Instruction::CondJump(3, Mem::Const(Constant(1)), cond),
-            Instruction::Output(Mem::Const(Constant(3))), // should continue here if not jumped
-            Instruction::Output(Mem::Const(Constant(3))), // should skip to this line if jumped
+            Instruction::Push { location: Mem::Const(Constant(2)) },
+            Instruction::CondJump { pc: 3, location: Mem::Const(Constant(1)), test: cond },
+            Instruction::Output { location: Mem::Const(Constant(3)) }, // should continue here if not jumped
+            Instruction::Output { location: Mem::Const(Constant(3)) }, // should skip to this line if jumped
         ],
         vec![
             (Constant(1), Value::Int(mem)),

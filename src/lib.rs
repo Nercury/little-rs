@@ -7,24 +7,29 @@
 
 #![cfg_attr(feature="nightly", feature(test, drain))]
 
+extern crate byteorder;
+#[macro_use] extern crate log;
+
 use std::collections::HashMap;
-use std::io;
+use std::io::{ self, Write };
 use std::fmt;
+use byteorder::{ WriteBytesExt, LittleEndian };
 
 mod options;
-pub mod interpreter;
 mod template;
 mod error;
+
+pub mod interpreter;
+pub mod compiler;
 pub mod stream;
+pub mod bytecode;
 
 pub use options::{ OptionsTemplate, Options };
 pub use template::{ Template };
 pub use error::seek::SeekError;
-pub use error::runtime::{ LittleError, LittleResult };
+pub use error::little::{ LittleError, LittleResult };
+pub use error::build::{ BuildError };
 
-/// Immutable runtime parameter for machine.
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub struct Parameter(pub u32);
 /// Mutable internal machine binding.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Binding(pub u32);
@@ -42,10 +47,12 @@ pub struct Constant(pub u32);
 pub enum Mem {
     /// Constant item.
     Const(Constant),
-    /// Param item.
-    Param(Parameter),
     /// Binding.
     Binding(Binding),
+    /// Parameter with name.
+    Parameter { name: Constant },
+    /// All parameters.
+    Parameters,
     /// Last value on stack.
     StackTop1,
     /// Last - 1 value on stack.
@@ -75,19 +82,21 @@ pub enum Cond {
 #[derive(Copy, Clone, Debug)]
 pub enum Instruction {
     /// Output specified `Mem`.
-    Output(Mem),
+    Output { location: Mem },
+    /// Replace a value in `StackTop1` with its property named `Mem`.
+    Property { name: Mem },
     /// Push data from `Mem` to stack.
-    Push(Mem),
+    Push { location: Mem },
     /// Pop specified number of stack items.
-    Pop(u16),
+    Pop { times: u16 },
     /// Jump to instruction.
-    Jump(u16),
+    Jump { pc: u16 },
     /// Jump to instruction based on `Cond`.
-    CondJump(u16, Mem, Cond),
+    CondJump { pc: u16, location: Mem, test: Cond },
     /// Call function with specified amount of stack items and store result to stack if bool = true.
-    Call(Call, u8, bool),
+    Call { call: Call, argc: u8, push_result_to_stack: bool },
     /// Copy value from `Mem` to `Binding`.
-    Load(Binding, Mem),
+    Load { binding: Binding, location: Mem },
     /// Interupt execution, it is up to the user to know what to do with the stack at current state.
     Interupt,
 }
@@ -105,10 +114,18 @@ impl<V, F: for<'z> Fn(&'z [V]) -> LittleResult<V>> Function<V> for F {
     }
 }
 
-/// Call mapping error.
-#[derive(Debug)]
-pub enum CallMapError {
-    NotFound(String),
+/// Structure used to uniquely identify executable blobs.
+#[derive(Hash, Eq, PartialEq)]
+pub struct Fingerprint([u8;20]);
+
+impl Fingerprint {
+    pub fn empty() -> Fingerprint {
+        Fingerprint([0;20])
+    }
+
+    pub fn new(inner: [u8;20]) -> Fingerprint {
+        Fingerprint(inner)
+    }
 }
 
 /// Converts template into a runable version.
@@ -117,25 +134,113 @@ pub enum CallMapError {
 /// so it is possible to call `run` on it.
 ///
 /// Also requires `calls` list that could be mapped to calls required by processor.
-pub trait BuildProcessor<'a, V> {
-    type Output: Run<'a, V>;
+pub trait Build<'a, V> {
+    type Output: Execute<'a, V>;
 
-    fn build_processor(
+    /// Builds executable from template.
+    fn build(
         &'a mut self,
+        id: &str,
         template: Template<V>,
         calls: &'a HashMap<&'a str, &'a (Function<V> + 'a)>
-    ) -> Result<Self::Output, CallMapError>;
+    ) -> LittleResult<Self::Output>;
+
+    /// Loads existing executable by unique fingerprint and env fingerprint.
+    fn load(&'a mut self, id: &str, env: Fingerprint, calls: &'a Vec<&'a (Function<V> + 'a)>)
+        -> LittleResult<Self::Output>;
 }
 
-/// Used by processors to produce readable stream based on provided parameters.
-pub trait Run<'a, V> {
+/// Executes compiled blob and converts input value to output stream.
+pub trait Execute<'a, V> {
     type Stream: io::Read;
 
-    fn run(&'a self, parameters: Options<Parameter, V>) -> Self::Stream;
+    /// Run this executable.
+    fn execute(&'a self, V) -> Self::Stream;
+
+    /// Get executable's id.
+    fn get_id<'r>(&'r self) -> &'r str;
+
+    /// Get environment fingerprint required by executable.
+    fn identify_env(&self) -> Fingerprint;
 }
 
-/// User value has to implement this trait.
-pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display { }
+pub trait IdentifyValue {
+    fn identify_value(&self) -> Option<Fingerprint>;
+    fn hash_value<H: Sha1Hasher>(&self, hasher: &mut H) -> Result<(), ()>;
+}
+
+pub trait Sha1Hasher {
+    /// Completes a round of hashing, producing the output hash generated.
+    fn finish(&self) -> Fingerprint;
+
+    /// Writes some data into this `Hasher`
+    fn write(&mut self, bytes: &[u8]);
+
+    /// Write a single `u8` into this hasher
+    #[inline]
+    fn write_u8(&mut self, i: u8) {
+        self.write(&[i])
+    }
+
+    /// Write a single `u16` into this hasher.
+    #[inline]
+    fn write_u16(&mut self, i: u16) {
+        let mut buf_ref: &mut [u8] = &mut [0u8;2];
+        buf_ref.write_u16::<LittleEndian>(i).unwrap();
+        self.write(buf_ref);
+    }
+
+    /// Write a single `u32` into this hasher.
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        let mut buf_ref: &mut [u8] = &mut [0u8;4];
+        buf_ref.write_u32::<LittleEndian>(i).unwrap();
+        self.write(buf_ref);
+    }
+
+    /// Write a single `u64` into this hasher.
+    #[inline]
+    fn write_u64(&mut self, i: u64) {
+        let mut buf_ref: &mut [u8] = &mut [0u8;8];
+        buf_ref.write_u64::<LittleEndian>(i).unwrap();
+        self.write(buf_ref);
+    }
+
+    /// Write a single `i8` into this hasher.
+    #[inline]
+    fn write_i8(&mut self, i: i8) {
+        let mut buf_ref: &mut [u8] = &mut [0u8;1];
+        buf_ref.write_i8(i).unwrap();
+        self.write(buf_ref);
+    }
+
+    /// Write a single `i16` into this hasher.
+    #[inline]
+    fn write_i16(&mut self, i: i16) {
+        let mut buf_ref: &mut [u8] = &mut [0u8;2];
+        buf_ref.write_i16::<LittleEndian>(i).unwrap();
+        self.write(buf_ref);
+    }
+
+    /// Write a single `i32` into this hasher.
+    #[inline]
+    fn write_i32(&mut self, i: i32) {
+        let mut buf_ref: &mut [u8] = &mut [0u8;4];
+        buf_ref.write_i32::<LittleEndian>(i).unwrap();
+        self.write(buf_ref);
+    }
+
+    /// Write a single `i64` into this hasher.
+    #[inline]
+    fn write_i64(&mut self, i: i64) {
+        let mut buf_ref: &mut [u8] = &mut [0u8;8];
+        buf_ref.write_i64::<LittleEndian>(i).unwrap();
+        self.write(buf_ref);
+    }
+}
+
+/// Little Value abstraction, used by runtime.
+pub trait LittleValue : Default + PartialEq + PartialOrd + Clone + IdentifyValue + fmt::Display { }
 
 /// Seek to an offset.
 pub trait PositionSeek {
