@@ -8,12 +8,12 @@
 #![cfg_attr(feature="nightly", feature(test, drain))]
 
 extern crate byteorder;
-extern crate crypto;
 #[macro_use] extern crate log;
 
 use std::collections::HashMap;
-use std::io;
+use std::io::{ self, Write };
 use std::fmt;
+use byteorder::{ WriteBytesExt, LittleEndian };
 
 mod options;
 mod template;
@@ -83,7 +83,7 @@ pub enum Cond {
 pub enum Instruction {
     /// Output specified `Mem`.
     Output { location: Mem },
-    /// Put a property named `Mem` into `StackTop2` for value in `StackTop1`.
+    /// Replace a value in `StackTop1` with its property named `Mem`.
     Property { name: Mem },
     /// Push data from `Mem` to stack.
     Push { location: Mem },
@@ -115,7 +115,18 @@ impl<V, F: for<'z> Fn(&'z [V]) -> LittleResult<V>> Function<V> for F {
 }
 
 /// Structure used to uniquely identify executable blobs.
+#[derive(Hash, Eq, PartialEq)]
 pub struct Fingerprint([u8;20]);
+
+impl Fingerprint {
+    pub fn empty() -> Fingerprint {
+        Fingerprint([0;20])
+    }
+
+    pub fn new(inner: [u8;20]) -> Fingerprint {
+        Fingerprint(inner)
+    }
+}
 
 /// Converts template into a runable version.
 ///
@@ -150,11 +161,86 @@ pub trait Execute<'a, V> {
     fn get_id<'r>(&'r self) -> &'r str;
 
     /// Get environment fingerprint required by executable.
-    fn get_env(&self) -> Fingerprint;
+    fn identify_env(&self) -> Fingerprint;
+}
+
+pub trait IdentifyValue {
+    fn identify_value(&self) -> Option<Fingerprint>;
+    fn hash_value<H: Sha1Hasher>(&self, hasher: &mut H) -> Result<(), ()>;
+}
+
+pub trait Sha1Hasher {
+    /// Completes a round of hashing, producing the output hash generated.
+    fn finish(&self) -> Fingerprint;
+
+    /// Writes some data into this `Hasher`
+    fn write(&mut self, bytes: &[u8]);
+
+    /// Write a single `u8` into this hasher
+    #[inline]
+    fn write_u8(&mut self, i: u8) {
+        self.write(&[i])
+    }
+
+    /// Write a single `u16` into this hasher.
+    #[inline]
+    fn write_u16(&mut self, i: u16) {
+        let mut buf_ref: &mut [u8] = &mut [0u8;2];
+        buf_ref.write_u16::<LittleEndian>(i).unwrap();
+        self.write(buf_ref);
+    }
+
+    /// Write a single `u32` into this hasher.
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        let mut buf_ref: &mut [u8] = &mut [0u8;4];
+        buf_ref.write_u32::<LittleEndian>(i).unwrap();
+        self.write(buf_ref);
+    }
+
+    /// Write a single `u64` into this hasher.
+    #[inline]
+    fn write_u64(&mut self, i: u64) {
+        let mut buf_ref: &mut [u8] = &mut [0u8;8];
+        buf_ref.write_u64::<LittleEndian>(i).unwrap();
+        self.write(buf_ref);
+    }
+
+    /// Write a single `i8` into this hasher.
+    #[inline]
+    fn write_i8(&mut self, i: i8) {
+        let mut buf_ref: &mut [u8] = &mut [0u8;1];
+        buf_ref.write_i8(i).unwrap();
+        self.write(buf_ref);
+    }
+
+    /// Write a single `i16` into this hasher.
+    #[inline]
+    fn write_i16(&mut self, i: i16) {
+        let mut buf_ref: &mut [u8] = &mut [0u8;2];
+        buf_ref.write_i16::<LittleEndian>(i).unwrap();
+        self.write(buf_ref);
+    }
+
+    /// Write a single `i32` into this hasher.
+    #[inline]
+    fn write_i32(&mut self, i: i32) {
+        let mut buf_ref: &mut [u8] = &mut [0u8;4];
+        buf_ref.write_i32::<LittleEndian>(i).unwrap();
+        self.write(buf_ref);
+    }
+
+    /// Write a single `i64` into this hasher.
+    #[inline]
+    fn write_i64(&mut self, i: i64) {
+        let mut buf_ref: &mut [u8] = &mut [0u8;8];
+        buf_ref.write_i64::<LittleEndian>(i).unwrap();
+        self.write(buf_ref);
+    }
 }
 
 /// Little Value abstraction, used by runtime.
-pub trait LittleValue : Default + Eq + PartialOrd + Clone + fmt::Display { }
+pub trait LittleValue : Default + PartialEq + PartialOrd + Clone + IdentifyValue + fmt::Display { }
 
 /// Seek to an offset.
 pub trait PositionSeek {

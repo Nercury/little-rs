@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use little::LittleValue;
+use little::{ LittleValue, IdentifyValue, Sha1Hasher, Fingerprint };
 
 /// Simple value implementation.
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
@@ -13,6 +13,16 @@ pub enum Value {
 }
 
 impl LittleValue for Value { }
+
+impl IdentifyValue for Value {
+    fn identify_value(&self) -> Option<Fingerprint> {
+        None
+    }
+
+    fn hash_value<H: Sha1Hasher>(&self, _hasher: &mut H) -> Result<(), ()> {
+        Err(())
+    }
+}
 
 impl Default for Value {
     fn default() -> Value {

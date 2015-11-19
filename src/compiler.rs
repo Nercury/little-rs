@@ -57,8 +57,8 @@ impl<'a, V: fmt::Debug> Execute<'a, V> for Executable {
         &self.id
     }
 
-    fn get_env(&self) -> Fingerprint {
-        Fingerprint([0;20])
+    fn identify_env(&self) -> Fingerprint {
+        Fingerprint::empty()
     }
 }
 

@@ -19,6 +19,18 @@ pub enum Value {
 /// One requirement: this trait needs to be implemented for it.
 impl LittleValue for Value { }
 
+/// Implement hashing to fingerprint so that values can be compared using fingerprints.
+/// Otherwise Little will treat all values as separate.
+impl IdentifyValue for Value {
+    fn identify_value(&self) -> Option<Fingerprint> {
+        None
+    }
+
+    fn hash_value<H: Sha1Hasher>(&self, _hasher: &mut H) -> Result<(), ()> {
+        Err(())
+    }
+}
+
 /// And also requires Default trait.
 impl Default for Value {
     fn default() -> Value {
