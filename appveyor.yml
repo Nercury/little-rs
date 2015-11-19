@@ -3,10 +3,6 @@ environment:
   - RUST: 1.4.0
     TARGET: x86_64-pc-windows-msvc
   - RUST: 1.4.0
-    TARGET: i686-pc-windows-msvc
-  - RUST: 1.4.0
-    TARGET: i686-pc-windows-gnu
-  - RUST: 1.2.0
     TARGET: i686-pc-windows-gnu
   - RUST: 1.0.0
     TARGET: i686-pc-windows-gnu
