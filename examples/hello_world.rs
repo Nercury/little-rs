@@ -63,7 +63,7 @@ fn main() {
 
     // Create new template with instructions and constants.
     let template = Template::empty()
-        .push_instructions(vec![
+        .with_instructions(vec![
             // Push constant 0 to stack. It is mapped to "Hello" in this template.
             Instruction::Push { location: Mem::Const(Constant(0)) },
             // Push template parameter 1 to stack. It will be received on the "run" call.
@@ -75,9 +75,9 @@ fn main() {
         ])
         // Map "join" function to 0. Actual function will be received when interpreter is
         // constructed.
-        .push_call("join", Call(0))
+        .with_call("join", Call(0))
         // Map constant "Hello" to 0.
-        .push_constant(Constant(0), Value::Str("Hello".into()));
+        .with_constant(Constant(0), Value::Str("Hello".into()));
 
     let mut i = Interpreter::new();
 

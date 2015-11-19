@@ -39,12 +39,17 @@ impl<V> Template<V> {
         }
     }
 
-    pub fn push_constant(mut self, index: Constant, value: V) -> Self {
+    pub fn with_constant(mut self, index: Constant, value: V) -> Self {
         self.constants.push(index, value);
         self
     }
 
-    pub fn push_call<S: Into<String>>(mut self, key: S, index: Call) -> Self {
+    pub fn push_constant(&mut self, index: Constant, value: V) -> &mut Self {
+        self.constants.push(index, value);
+        self
+    }
+
+    pub fn with_call<S: Into<String>>(mut self, key: S, index: Call) -> Self {
         self.calls_template.push(key, index);
         self
     }
@@ -53,7 +58,7 @@ impl<V> Template<V> {
         self.instructions.push(instruction);
     }
 
-    pub fn push_instructions<I: IntoIterator<Item=Instruction>>(mut self, instructions: I) -> Self {
+    pub fn with_instructions<I: IntoIterator<Item=Instruction>>(mut self, instructions: I) -> Self {
         self.instructions.extend(instructions.into_iter());
         self
     }

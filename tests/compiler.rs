@@ -21,7 +21,7 @@ fn output_param() {
     let p = i.build(
         "",
         Template::<Value>::empty()
-            .push_instructions(vec![
+            .with_instructions(vec![
                 Instruction::Output { location: Mem::Parameters }
             ]),
         &funs

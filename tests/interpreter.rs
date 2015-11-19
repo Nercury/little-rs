@@ -18,7 +18,7 @@ fn error_if_missing_constant() {
     let p = i.build(
         "",
         Template::empty()
-            .push_instructions(vec![
+            .with_instructions(vec![
                 Instruction::Output { location: Mem::Const(Constant(1)) },
             ]),
         &funs
@@ -41,8 +41,8 @@ fn can_handle_interupt() {
     let p = i.build(
         "",
         Template::empty()
-            .push_constant(Constant(1), Value::Str("Abr".into()))
-            .push_instructions(vec![
+            .with_constant(Constant(1), Value::Str("Abr".into()))
+            .with_instructions(vec![
                 Instruction::Output { location: Mem::Const(Constant(1)) },
                 Instruction::Interupt,
                 Instruction::Output { location: Mem::Const(Constant(1)) },
@@ -77,7 +77,7 @@ fn error_if_missing_const() {
     let p = i.build(
         "",
         Template::<Value>::empty()
-            .push_instructions(vec![
+            .with_instructions(vec![
                 Instruction::Output { location: Mem::Const(Constant(1)) }
             ]),
         &funs
@@ -100,7 +100,7 @@ fn error_if_pop_empty_stack() {
     let p = i.build(
         "",
         Template::empty()
-            .push_instructions(vec![
+            .with_instructions(vec![
                 Instruction::Pop { times: 1 }
             ]),
         &funs
@@ -247,10 +247,10 @@ fn run_function() {
     let p = i.build(
         "",
         Template::<Value>::empty()
-            .push_call("add", Call(1))
-            .push_constant(Constant(1), Value::Int(2))
-            .push_constant(Constant(2), Value::Int(3))
-            .push_instructions(vec![
+            .with_call("add", Call(1))
+            .with_constant(Constant(1), Value::Int(2))
+            .with_constant(Constant(2), Value::Int(3))
+            .with_instructions(vec![
                 Instruction::Push { location: Mem::Const(Constant(1)) },
                 Instruction::Push { location: Mem::Const(Constant(2)) },
                 Instruction::Call { call: Call(1), argc: 2, push_result_to_stack: true },
@@ -413,7 +413,7 @@ fn from_instructions_and_params(
     let p = i.build(
         "",
         Template::empty()
-            .push_instructions(instructions),
+            .with_instructions(instructions),
         &funs
     ).unwrap();
 
@@ -431,10 +431,10 @@ fn from_instructions_and_constants(
     constants: Vec<(Constant, Value)>
 ) -> String {
     let mut template = Template::empty()
-        .push_instructions(instructions);
+        .with_instructions(instructions);
 
     for (constant, value) in constants {
-        template = template.push_constant(constant, value);
+        template = template.with_constant(constant, value);
     }
 
     let funs = HashMap::new();
