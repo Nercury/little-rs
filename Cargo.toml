@@ -1,6 +1,6 @@
 [package]
 name = "little"
-version = "0.2.7"
+version = "0.3.0"
 authors = ["Nerijus Arlauskas <nercury@gmail.com>"]
 documentation = "http://nercury.github.io/little-rs/little/index.html"
 repository = "https://github.com/Nercury/little-rs"
