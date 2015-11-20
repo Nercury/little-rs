@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::cmp::Ordering;
 use std::fmt;
 
-use little::{ GetProperty, LittleValue, LittleResult, LittleError, IdentifyValue, Sha1Hasher, Fingerprint };
+use little::{ GetProperty, LittleValue, IdentifyValue, Sha1Hasher, Fingerprint };
 
 /// Simple value implementation.
 #[derive(Clone, Debug, Eq, PartialEq)]
