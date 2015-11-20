@@ -276,25 +276,26 @@ struct Values<'a, V: 'a> {
 }
 
 impl<'a, V: LittleValue> Values<'a, V> {
+    fn get_const(&self, i: Constant) -> Result<Cow<V>, LittleError> {
+        match self.executable.constants.get(i) {
+            Some(value) => Ok(Cow::Borrowed(value)),
+            None => return Err(LittleError::ConstantMissing(i)),
+        }
+    }
+
     fn get_mem_value(&self, mem: &Mem) -> Result<Cow<V>, LittleError> {
         Ok(match *mem {
             Mem::Binding(i) => self.get(i),
-            Mem::Parameter { name } => {
-                unreachable!("get_mem_value Parameter not implemented")
-                // let name = match self.parameters.get(name) {
-                //     Some(value) => Cow::Borrowed(value),
-                //     None => return Err(LittleError::ParameterMissing(i)),
-                // };
-                // match self.parameters.get(i) {
-                //     Some(value) => Cow::Borrowed(value),
-                //     None => return Err(LittleError::ParameterMissing(i)),
-                // }
+            Mem::Parameter { name: name_constant } => {
+                let name = try!(self.get_const(name_constant));
+                let value = match self.parameters.get_property(name.into_owned()) {
+                    Some(value) => value,
+                    None => return Err(LittleError::ParameterMissing(name_constant)),
+                };
+                Cow::Owned(value)
             },
             Mem::Parameters => { Cow::Borrowed(&self.parameters) },
-            Mem::Const(i) => match self.executable.constants.get(i) {
-                Some(value) => Cow::Borrowed(value),
-                None => return Err(LittleError::ConstantMissing(i)),
-            },
+            Mem::Const(i) => try!(self.get_const(i)),
             Mem::StackTop1 => match self.stack.last() {
                 Some(value) => Cow::Borrowed(value),
                 None => return Err(LittleError::StackUnderflow),

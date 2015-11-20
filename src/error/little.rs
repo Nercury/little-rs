@@ -11,7 +11,7 @@ use {
 #[derive(Debug)]
 pub enum LittleError {
     /// A parameter was required for an instruction, but it was not found.
-    ParameterMissing(String),
+    ParameterMissing(Constant),
     /// A constant was required for an instruction, but it was not found.
     ConstantMissing(Constant),
     /// A call was required for an instruction, but it was not found.
