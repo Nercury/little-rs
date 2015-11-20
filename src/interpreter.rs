@@ -131,38 +131,43 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
             Some(i) => {
                 match *i {
                     Instruction::Output { ref location } => {
+                        debug!("Output (location: {:?})", location);
                         try!(write!(self.buf, "{}", try!(self.values.get_mem_value(location))))
                     },
                     Instruction::Property { ref name } => {
+                        debug!("Property (name: {:?})", name);
                         let name = try!(self.values.get_mem_value(name)).into_owned();
+                        trace!("property name {}", name);
                         let obj = match self.values.stack.pop() {
                             None => return Err(LittleError::StackUnderflow),
                             Some(v) => v,
                         };
-                        match obj.get_property(name) {
-                            Some(value) => self.values.stack.push(value),
-                            None => unreachable!("not implemented not found property"),
-                        }
+                        self.values.stack.push(obj.get_property(name).unwrap());
                     },
                     Instruction::Pop { mut times } => while times > 0 {
+                        debug!("Pop (times: {:?})", times);
                         if let None = self.values.stack.pop() {
                             return Err(LittleError::StackUnderflow);
                         }
                         times -= 1;
                     },
                     Instruction::Push { ref location } => {
+                        debug!("Push (location: {:?})", location);
                         let value = try!(self.values.get_mem_value(location)).into_owned();
                         self.values.stack.push(value);
                     },
                     Instruction::Load { binding, ref location } => {
+                        debug!("Load (binding: {:?}, location: {:?})", binding, location);
                         let value = try!(self.values.get_mem_value(location)).into_owned();
                         self.values.set(binding, value);
                     },
                     Instruction::Jump { pc } => {
+                        debug!("Jump (pc: {:?})", pc);
                         self.pc = pc as usize;
                         return Ok(ExecutionResult::Continue);
                     },
                     Instruction::CondJump { pc, ref location, test } => {
+                        debug!("CondJump (pc: {:?}, location: {:?}, test: {:?})", pc, location, test);
                         let value = try!(self.values.get_mem_value(location));
                         let value_ref = value.as_ref();
                         let stack = match self.values.stack.last() {
@@ -183,6 +188,7 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
                         }
                     },
                     Instruction::Call { call, argc, push_result_to_stack } => {
+                        debug!("Call (call: {:?}, argc: {:?}, push_result_to_stack: {:?})", call, argc, push_result_to_stack);
                         let fun = match self.values.executable.calls.get(call) {
                             Some(f) => f,
                             None => return Err(LittleError::CallMissing(call)),
@@ -196,6 +202,7 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
                         }
                     },
                     Instruction::Interupt => {
+                        debug!("Interupt");
                         self.pc += 1;
                         return Ok(ExecutionResult::Interupt);
                     }
