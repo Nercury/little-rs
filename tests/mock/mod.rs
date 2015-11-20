@@ -1,15 +1,30 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
+use std::cmp::Ordering;
 use std::fmt;
 
 use little::{ LittleValue, IdentifyValue, Sha1Hasher, Fingerprint };
 
 /// Simple value implementation.
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Value {
     Null,
     Int(i64),
-    Str(String)
+    Str(String),
+    Obj(HashMap<String, Value>),
+}
+
+impl PartialOrd for Value {
+    fn partial_cmp(&self, other: &Value) -> Option<Ordering> {
+        match (self, other) {
+            (&Value::Null, &Value::Null) => Some(Ordering::Equal),
+            (&Value::Int(ref a), &Value::Int(ref b)) => a.partial_cmp(b),
+            (&Value::Str(ref a), &Value::Str(ref b)) => a.partial_cmp(b),
+            (&Value::Obj(_), &Value::Obj(_)) => None,
+            _ => None,
+        }
+    }
 }
 
 impl LittleValue for Value { }
@@ -36,6 +51,7 @@ impl fmt::Display for Value {
             Value::Null => Ok(()),
             Value::Int(ref i) => write!(f, "{}", i),
             Value::Str(ref s) => write!(f, "{}", s),
+            Value::Obj(ref s) => write!(f, "{:?}", s),
         }
     }
 }

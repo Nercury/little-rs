@@ -269,6 +269,37 @@ fn run_function() {
 }
 
 #[test]
+fn output_string_named_property() {
+    let mut funs = HashMap::new();
+    let mut i = Interpreter::new();
+    let p = i.build(
+        "",
+        Template::<Value>::empty()
+            .with_constant(Constant(2), Value::Str("your_name".into()))
+            .with_instructions(vec![
+                Instruction::Push { location: Mem::Parameters },
+                Instruction::Property { name: Mem::Const(Constant(2)) },
+                Instruction::Output { location: Mem::StackTop1 },
+            ]),
+        &funs
+    ).unwrap();
+
+    let mut res = String::new();
+
+    let properties = Value::Obj(
+        vec![
+            ("your_name".into(), Value::Str("hello".into()))
+        ].into_iter().collect()
+    );
+
+    p.execute(properties)
+        .read_to_string(&mut res)
+        .unwrap();
+
+    assert_eq!("hello", &res);
+}
+
+#[test]
 fn push_const_output_stack_top1() {
     let res = from_instructions_and_constants(
         vec![
