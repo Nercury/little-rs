@@ -133,8 +133,16 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
                     Instruction::Output { ref location } => {
                         try!(write!(self.buf, "{}", try!(self.values.get_mem_value(location))))
                     },
-                    Instruction::Property { mut name } => {
-                        unreachable!("execute Property not implemented")
+                    Instruction::Property { ref name } => {
+                        let name = try!(self.values.get_mem_value(name)).into_owned();
+                        let obj = match self.values.stack.pop() {
+                            None => return Err(LittleError::StackUnderflow),
+                            Some(v) => v,
+                        };
+                        match obj.get_property(name) {
+                            Some(value) => self.values.stack.push(value),
+                            None => unreachable!("not implemented not found property"),
+                        }
                     },
                     Instruction::Pop { mut times } => while times > 0 {
                         if let None = self.values.stack.pop() {

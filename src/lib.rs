@@ -239,8 +239,20 @@ pub trait Sha1Hasher {
     }
 }
 
+pub trait GetProperty<V> {
+    fn get_property(&self, name: V) -> Option<V>;
+}
+
 /// Little Value abstraction, used by runtime.
-pub trait LittleValue : Default + PartialEq + PartialOrd + Clone + IdentifyValue + fmt::Display { }
+pub trait LittleValue :
+    Default +
+    GetProperty<Self> +
+    PartialEq +
+    PartialOrd +
+    Clone +
+    IdentifyValue +
+    fmt::Display
+{ }
 
 /// Seek to an offset.
 pub trait PositionSeek {

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::cmp::Ordering;
 use std::fmt;
 
-use little::{ LittleValue, IdentifyValue, Sha1Hasher, Fingerprint };
+use little::{ GetProperty, LittleValue, IdentifyValue, Sha1Hasher, Fingerprint };
 
 /// Simple value implementation.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -28,6 +28,18 @@ impl PartialOrd for Value {
 }
 
 impl LittleValue for Value { }
+
+impl GetProperty<Value> for Value {
+    fn get_property(&self, name: Value) -> Option<Value> {
+        match *self {
+            Value::Obj(ref map) => match name {
+                Value::Str(key) => map.get(&key).cloned(),
+                _ => unreachable!("only Str value names are implemented"),
+            },
+            _ => None,
+        }
+    }
+}
 
 impl IdentifyValue for Value {
     fn identify_value(&self) -> Option<Fingerprint> {

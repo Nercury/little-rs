@@ -31,6 +31,12 @@ impl IdentifyValue for Value {
     }
 }
 
+impl GetProperty<Value> for Value {
+    fn get_property(&self, name: Value) -> Option<Value> {
+        unreachable!();
+    }
+}
+
 /// And also requires Default trait.
 impl Default for Value {
     fn default() -> Value {
