@@ -5,8 +5,6 @@
 <style>.sidebar { margin-top: 53px }</style>
 */
 
-#![cfg_attr(feature="nightly", feature(test, drain))]
-
 extern crate byteorder;
 #[macro_use] extern crate log;
 

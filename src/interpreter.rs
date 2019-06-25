@@ -214,7 +214,6 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
         }
     }
 
-    #[cfg(feature="nightly")]
     fn consume_buf(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let self_buf_len = self.buf.len();
         if self_buf_len >= buf.len() {
@@ -225,22 +224,6 @@ impl<'a, V: LittleValue> InterpreterStream<'a, V> {
         } else {
             for (i, o) in self.buf.drain(..).zip(&mut buf[..self_buf_len]) {
                 *o = i
-            }
-            Ok(self_buf_len)
-        }
-    }
-
-    #[cfg(not(feature="nightly"))]
-    fn consume_buf(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let self_buf_len = self.buf.len();
-        if self_buf_len >= buf.len() {
-            for (_, o) in (0..buf.len()).zip(buf.iter_mut()) {
-                *o = self.buf.remove(0);
-            }
-            Ok(buf.len())
-        } else {
-            for (_, o) in (0..self_buf_len).zip(&mut buf[..self_buf_len]) {
-                *o = self.buf.remove(0)
             }
             Ok(self_buf_len)
         }
@@ -322,7 +305,6 @@ impl<'a, V: LittleValue> Values<'a, V> {
         }
     }
 
-    #[cfg(feature="nightly")]
     fn ensure_capacity_for_index(&mut self, index: usize) {
         let required_len = index + 1;
         if required_len > MAX_VALUES {
@@ -330,21 +312,6 @@ impl<'a, V: LittleValue> Values<'a, V> {
         }
         if required_len > self.values.len() {
             self.values.resize(required_len, V::default());
-        }
-    }
-
-    #[cfg(not(feature="nightly"))]
-    fn ensure_capacity_for_index(&mut self, index: usize) {
-        use std::iter;
-
-        let required_len = index + 1;
-        if required_len > MAX_VALUES {
-            panic!("maximum number of values {} reached!", MAX_VALUES);
-        }
-        if required_len > self.values.len() {
-            let missing_len = required_len - self.values.len();
-            self.values.reserve(missing_len);
-            self.values.extend(iter::repeat(V::default()).take(missing_len));
         }
     }
 }

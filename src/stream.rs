@@ -86,7 +86,7 @@ mod test {
     }
 }
 
-#[cfg(feature="nightly")]
+#[cfg(bench)]
 mod bench {
     extern crate test;
 
